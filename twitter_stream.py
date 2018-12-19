@@ -87,12 +87,12 @@ class MyListener(StreamListener):
         try:
             status.retweeted_status
         except AttributeError:
-            if status.in_reply_to_status_id is None and status.in_reply_to_user_id is None:
-                try:
-                    #print(status.author.screen_name, status.text)
-                    self.myQueue.enqueue(status)
-                except BaseException as e:
-                    print("Error on_data: %s" % str(e))
+            #if status.in_reply_to_status_id is None and status.in_reply_to_user_id is None:
+            try:
+                #print(status.author.screen_name, status.text)
+                self.myQueue.enqueue(status)
+            except BaseException as e:
+                print("Error on_data: %s" % str(e))
         return True
 
     def on_error(self, status):
