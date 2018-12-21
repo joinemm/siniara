@@ -236,14 +236,16 @@ class TwitterStream:
         print("Listing followed users")
         nothing = True
         pages = []
-        added = None
+        added = 20
         this_page = None
         for name in self.follow_dict:
-            if added > 19 or added is None:
+            if added > 19:
+                added = 0
                 if this_page is not None:
                     pages.append(this_page)
                 this_page = discord.Embed()
                 this_page.title = "Currently followed accounts on this server:"
+                this_page.description = ""
 
             channels_s = ""
             no_channels = True
@@ -255,9 +257,11 @@ class TwitterStream:
                 this_page.description += f"\n{name} ({self.follow_dict[name]['id']}) in {channels_s}"
                 added += 1
                 nothing = False
+        pages.append(this_page)
         if nothing:
             await ctx.send("No follows set for this server!")
         else:
+            pages[page-1].set_footer(text=f"page {page} of {len(pages)}")
             await ctx.send(embed=pages[page-1])
 
     @commands.command()
