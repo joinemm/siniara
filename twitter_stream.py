@@ -110,7 +110,11 @@ class TwitterStream:
         self.update_follow_ids()
         await self.start_stream()
         while True:
-            await self.post_from_queue()
+            try:
+                await self.post_from_queue()
+            except Exception as e:
+                print("Ignoring exception in refresh loop")
+                print(e)
             await asyncio.sleep(60)
 
     async def post_from_queue(self):
@@ -175,6 +179,7 @@ class TwitterStream:
                     to_add.append((user.screen_name, user.id))
                 except Exception:
                     await ctx.send(f"Error adding user `{username}`")
+                    print(f"Error adding user {username}")
             if to_add:
                 add_follows(self.follow_dict, channel, to_add)
                 await ctx.send(f"{len(to_add)} new users added to follow list of <#{channel}>. Will apply on next reset.")
@@ -227,11 +232,19 @@ class TwitterStream:
         self.follow_list = idlist
 
     @commands.command()
-    async def list(self, ctx):
-        print("Listing followed users...")
+    async def list(self, ctx, page=1):
+        print("Listing followed users")
         nothing = True
-        content = "**Currently following:**"
+        pages = []
+        added = None
+        this_page = None
         for name in self.follow_dict:
+            if added > 19 or added is None:
+                if this_page is not None:
+                    pages.append(this_page)
+                this_page = discord.Embed()
+                this_page.title = "Currently followed accounts on this server:"
+
             channels_s = ""
             no_channels = True
             for channel in self.follow_dict[name]['channels']:
@@ -239,12 +252,13 @@ class TwitterStream:
                     channels_s += f"<#{channel}>"
                     no_channels = False
             if not no_channels:
-                content += f"\n{name} ({self.follow_dict[name]['id']}) in {channels_s}"
+                this_page.description += f"\n{name} ({self.follow_dict[name]['id']}) in {channels_s}"
+                added += 1
                 nothing = False
         if nothing:
             await ctx.send("No follows set for this server!")
         else:
-            await ctx.send(content)
+            await ctx.send(embed=pages[page-1])
 
     @commands.command()
     async def status(self, ctx):
