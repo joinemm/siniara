@@ -13,6 +13,7 @@ import discord
 from discord.ext import commands
 import asyncio
 import os
+import time
 
 consumer_key = os.environ.get("TWITTER_CONSUMER_KEY")
 consumer_secret = os.environ.get("TWITTER_CONSUMER_SECRET")
@@ -75,6 +76,9 @@ class Queue:
             return self.queue.pop()
         return None
 
+    def length(self):
+        return len(self.queue)
+
 
 class MyListener(StreamListener):
 
@@ -87,9 +91,7 @@ class MyListener(StreamListener):
         try:
             status.retweeted_status
         except AttributeError:
-            #if status.in_reply_to_status_id is None and status.in_reply_to_user_id is None:
             try:
-                #print(status.author.screen_name, status.text)
                 self.myQueue.enqueue(status)
             except BaseException as e:
                 print("Error on_data: %s" % str(e))
@@ -105,6 +107,7 @@ class TwitterStream:
 
     def __init__(self, client):
         self.client = client
+        self.start_time = time.time()
 
     async def on_ready(self):
         self.update_follow_ids()
@@ -117,11 +120,25 @@ class TwitterStream:
                 print(e)
             await asyncio.sleep(60)
 
+    async def start_stream(self):
+        print("Starting stream")
+        # print(f"follows list: {self.follow_list}")
+        self.twitter_stream = Stream(auth, MyListener(), tweet_mode='extended')
+        self.twitter_stream.filter(follow=self.follow_list, is_async=True)
+        self.queue = self.twitter_stream.listener.myQueue
+        await self.client.change_presence(activity=discord.Activity(name=f'{len(self.follow_list)} Fansites', type=3))
+
+    def update_follow_ids(self):
+        self.follow_dict = refresh_follows()
+        idlist = []
+        for user in self.follow_dict:
+            idlist.append(self.follow_dict[user]['id'])
+        self.follow_list = idlist
+
     async def post_from_queue(self):
-        tweet = self.twitter_stream.listener.myQueue.dequeue()
+        tweet = self.queue.dequeue()
         #print(tweet)
         if tweet is not None:
-            print("posting tweet from queue")
             twitter_user = tweet.user.screen_name
             channels = self.follow_dict[twitter_user]['channels']
 
@@ -129,7 +146,6 @@ class TwitterStream:
             try:
                 media = tweet.extended_entities.get('media', [])
             except AttributeError:
-                print("No media found in tweet.")
                 content = discord.Embed(colour=int(tweet.user.profile_link_color, 16))
                 for channel in channels:
                     content.description = tweet.text
@@ -155,6 +171,8 @@ class TwitterStream:
                                 media_url = video_urls[x]['url']
                 media_files.append((" ".join(hashtags), media_url, video_url))
 
+            print(f"Posting tweet from {twitter_user} - {len(media_files)} images")
+
             for file in media_files:
                 content = discord.Embed(colour=int(tweet.user.profile_link_color, 16))
                 content.set_image(url=file[1])
@@ -167,6 +185,8 @@ class TwitterStream:
                     if file[2] is not None:
                         # content.description = f"Contains video/gif [Click here to view]({file[2]})"
                         await self.client.get_channel(channel).send(file[2])
+
+    # --commands
 
     @commands.command()
     @commands.has_permissions(administrator=True)
@@ -217,6 +237,14 @@ class TwitterStream:
         print("Stream reset")
 
     @commands.command()
+    async def uptime(self, ctx):
+        up_time = time.time() - self.start_time
+        m, s = divmod(up_time, 60)
+        h, m = divmod(m, 60)
+        await ctx.send("Current process uptime: %d hours %d minutes %d seconds" % (h, m, s))
+        print(f"Uptime requested: {h:d}:{m:d}:{s:d}")
+
+    @commands.command()
     @commands.has_permissions(administrator=True)
     async def config(self, ctx, setting, channel, arg):
         #if channel in
@@ -224,12 +252,6 @@ class TwitterStream:
         #    if arg in ["full", "partial", "none"]:
         pass
 
-    def update_follow_ids(self):
-        self.follow_dict = refresh_follows()
-        idlist = []
-        for user in self.follow_dict:
-            idlist.append(self.follow_dict[user]['id'])
-        self.follow_list = idlist
 
     @commands.command()
     async def list(self, ctx, page=1):
@@ -266,14 +288,11 @@ class TwitterStream:
 
     @commands.command()
     async def status(self, ctx):
-        await ctx.send(f"`running = {self.twitter_stream.running}; retry_count = {self.twitter_stream.retry_count}`")
+        await ctx.send(f"```running = {self.twitter_stream.running}\nretry_count = {self.twitter_stream.retry_count}"
+                       f"\nqueue length = {self.queue.length()}```")
+        print(f"status : running = {self.twitter_stream.running}\nretry_count = {self.twitter_stream.retry_count}"
+              f"\nqueue length = {self.queue.length()}")
 
-    async def start_stream(self):
-        print("Starting stream")
-        # print(f"follows list: {self.follow_list}")
-        self.twitter_stream = Stream(auth, MyListener(), tweet_mode='extended')
-        self.twitter_stream.filter(follow=self.follow_list, is_async=True)
-        await self.client.change_presence(activity=discord.Activity(name=f'{len(self.follow_list)} Fansites', type=3))
 
 
 def setup(client):
