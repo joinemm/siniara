@@ -140,6 +140,9 @@ class TwitterStream:
         #print(tweet)
         if tweet is not None:
             twitter_user = tweet.user.screen_name
+            if twitter_user not in self.follow_dict:
+                print(f"skipping user [{twitter_user}] not found in follow list")
+                return
             channels = self.follow_dict[twitter_user]['channels']
 
             media_files = []
@@ -236,16 +239,9 @@ class TwitterStream:
         await ctx.send("Stream reset, follow list updated.")
         print("Stream reset")
 
-    @commands.command()
-    async def uptime(self, ctx):
-        up_time = time.time() - self.start_time
-        m, s = divmod(up_time, 60)
-        h, m = divmod(m, 60)
-        await ctx.send("Current process uptime: %d hours %d minutes %d seconds" % (h, m, s))
-        print(f"Uptime requested: {h:d}:{m:d}:{s:d}")
 
     @commands.command()
-    @commands.has_permissions(administrator=True)
+    @commands.has_permissions(administrator=True, disabled=True)
     async def config(self, ctx, setting, channel, arg):
         #if channel in
         #if setting == "text":
@@ -288,11 +284,17 @@ class TwitterStream:
 
     @commands.command()
     async def status(self, ctx):
-        await ctx.send(f"```running = {self.twitter_stream.running}\nretry_count = {self.twitter_stream.retry_count}"
-                       f"\nqueue length = {self.queue.length()}```")
-        print(f"status : running = {self.twitter_stream.running}\nretry_count = {self.twitter_stream.retry_count}"
-              f"\nqueue length = {self.queue.length()}")
+        up_time = time.time() - self.start_time
+        m, s = divmod(up_time, 60)
+        h, m = divmod(m, 60)
 
+        bot_msg = await ctx.send(f"```running = {self.twitter_stream.running}\n"
+                       f"queue length = {self.queue.length()}\n"
+                       f"uptime = {h:.0f} hours {m:.0f} minutes {s:.0f} seconds\n"
+                       f"heartbeat = {self.client.latency*1000:.0f}ms\n"
+                       f"roundtrip latency = PENDINGms```")
+        latency = (bot_msg.created_at-ctx.message.created_at).total_seconds() * 1000
+        await bot_msg.edit(content=bot_msg.content.replace("PENDING", str(latency)))
 
 
 def setup(client):
