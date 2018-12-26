@@ -25,6 +25,17 @@ auth.set_access_token(access_token, access_secret)
 api = tweepy.API(auth)
 
 
+def load_config():
+    with open('config.json', 'r') as filehandle:
+        data = json.load(filehandle)
+        return data
+
+
+def save_config(data):
+    with open('config.json', 'w') as filehandle:
+        json.dump(data, filehandle, indent=4)
+
+
 def refresh_follows():
     with open('follows.json', 'r') as filehandle:
         data = json.load(filehandle)
@@ -108,6 +119,7 @@ class TwitterStream:
     def __init__(self, client):
         self.client = client
         self.start_time = time.time()
+        self.config_json = load_config()
 
     async def on_ready(self):
         self.update_follow_ids()
@@ -118,7 +130,7 @@ class TwitterStream:
             except Exception as e:
                 print("Ignoring exception in refresh loop")
                 print(e)
-            await asyncio.sleep(60)
+            await asyncio.sleep(self.config_json['refresh_delay'])
 
     async def start_stream(self):
         print("Starting stream")
@@ -149,8 +161,13 @@ class TwitterStream:
             try:
                 media = tweet.extended_entities.get('media', [])
             except AttributeError:
+                # no media
                 content = discord.Embed(colour=int(tweet.user.profile_link_color, 16))
                 for channel in channels:
+                    if str(channel) in self.config_json['channels']:
+                        if self.config_json['channels'][str(channel)].get('textmode') == "none":
+                            print(f"Skipping text post for {channel}")
+                            continue
                     content.description = tweet.text
                     content.set_author(icon_url=tweet.user.profile_image_url,
                                        name=f"@{tweet.user.screen_name}",
@@ -183,6 +200,10 @@ class TwitterStream:
                                    url=f"https://twitter.com/{tweet.user.screen_name}/status/{tweet.id}")
 
                 for channel in channels:
+                    if str(channel) in self.config_json['channels']:
+                        if self.config_json['channels'][str(channel)].get('textmode') == "full":
+                            content.description = tweet.text
+
                     await self.client.get_channel(channel).send(embed=content)
 
                     if file[2] is not None:
@@ -194,6 +215,7 @@ class TwitterStream:
     @commands.command()
     @commands.has_permissions(administrator=True)
     async def add(self, ctx, channel, *usernames):
+        """Add an account to the follow list"""
         if ctx.message.guild.get_channel(int(channel)) is not None:
             to_add = []
             for username in usernames:
@@ -212,6 +234,7 @@ class TwitterStream:
     @commands.command()
     @commands.has_permissions(administrator=True)
     async def remove(self, ctx, channel, *usernames):
+        """Remove an account from the follow list"""
         if ctx.message.guild.get_channel(int(channel)) is not None:
             to_remove = []
             for username in usernames:
@@ -228,10 +251,11 @@ class TwitterStream:
         else:
             await ctx.send(f"Channel `{channel}` not found on this server!")
 
-
     @commands.command()
     @commands.has_permissions(administrator=True)
     async def reset(self, ctx):
+        """Reset the stream; refresh follows and settings"""
+        self.config_json = load_config()
         self.update_follow_ids()
         self.twitter_stream.disconnect()
         del self.twitter_stream
@@ -239,18 +263,52 @@ class TwitterStream:
         await ctx.send("Stream reset, follow list updated.")
         print("Stream reset")
 
-
     @commands.command()
-    @commands.has_permissions(administrator=True, disabled=True)
-    async def config(self, ctx, setting, channel, arg):
-        #if channel in
-        #if setting == "text":
-        #    if arg in ["full", "partial", "none"]:
-        pass
+    @commands.has_permissions(administrator=True)
+    async def config(self, ctx, param1=None, param2=None, param3=None):
+        """Configure bot options."""
+        if param1 == "help" or param1 is None:
+            await ctx.send("`>config [channel] [setting] [value]`\n"
+                           "**settings:** `[textmode | refresh]`\n"
+                           "- **textmode:** `[none | partial | full]`\n"
+                           "-- `none`: images are posted without text and text-only posts are skipped\n"
+                           "-- `partial`: images are posted without text but text-only posts are posted normally\n"
+                           "-- `full`: (default) everything is posted with all the text\n"
+                           "- **refresh:** time in seconds to wait before checking the queue again for another tweet.\n\n"
+                           "example: `>config 124567891069420 textmode full`")
+            return
+        elif param1 == "refresh":
+            if ctx.message.author.id == 133311691852218378:
+                self.config_json['refresh_delay'] = int(param2)
+                save_config(self.config_json)
+                print(f"Set refresh delay to {param2}")
+                await ctx.send(f"Set refresh delay to `{param2}`")
+                return
+            else:
+                await ctx.send("ERROR: You are not allowed to change this setting.")
 
+        channel = ctx.message.guild.get_channel(int(param1))
+        if channel is None:
+            await ctx.send(f"ERROR: Channel `{param1}` not found on this server!")
+            return
+        if param2 == "textmode":
+            if param3 in ["full", "partial", "none"]:
+                if param1 not in self.config_json['channels']:
+                    self.config_json['channels'][param1] = {}
+                self.config_json['channels'][param1]['textmode'] = param3
+                save_config(self.config_json)
+                print(f"Set textmode for {channel.name} as {param3}")
+                await ctx.send(f"Set textmode for {channel.mention} to `{param3}`")
+                return
+            else:
+                await ctx.send(f"ERROR: Invalid parameter `{param3}` for setting `{param2}`. use `>config help` for help.")
+                return
+        else:
+            await ctx.send(f"ERROR: Invalid setting `{param2}`. use `>config help` for help.")
 
     @commands.command()
     async def list(self, ctx, page=1):
+        """List the currently followed accounts on this server."""
         print("Listing followed users")
         nothing = True
         pages = []
@@ -284,15 +342,18 @@ class TwitterStream:
 
     @commands.command()
     async def status(self, ctx):
+        """Get the bot's status"""
         up_time = time.time() - self.start_time
         m, s = divmod(up_time, 60)
         h, m = divmod(m, 60)
+        d, h = divmod(h, 24)
 
         bot_msg = await ctx.send(f"```running = {self.twitter_stream.running}\n"
-                       f"queue length = {self.queue.length()}\n"
-                       f"uptime = {h:.0f} hours {m:.0f} minutes {s:.0f} seconds\n"
-                       f"heartbeat = {self.client.latency*1000:.0f}ms\n"
-                       f"roundtrip latency = PENDINGms```")
+                                 f"queue length = {self.queue.length()}\n"
+                                 f"refresh delay = {self.config_json['refresh_delay']}s\n"
+                                 f"uptime = {d:.0f} days {h:.0f} hours {m:.0f} minutes {s:.0f} seconds\n"
+                                 f"heartbeat = {self.client.latency*1000:.0f}ms\n"
+                                 f"roundtrip latency = PENDINGms```")
         latency = (bot_msg.created_at-ctx.message.created_at).total_seconds() * 1000
         await bot_msg.edit(content=bot_msg.content.replace("PENDING", str(latency)))
 
