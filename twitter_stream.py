@@ -357,6 +357,28 @@ class TwitterStream:
         latency = (bot_msg.created_at-ctx.message.created_at).total_seconds() * 1000
         await bot_msg.edit(content=bot_msg.content.replace("PENDING", str(latency)))
 
+    @commands.command()
+    async def patreon(self, ctx):
+        """Get a link to the patreon page."""
+        await ctx.send("Consider joining my patreon to help with server upkeep costs <:vivismirk2:523308548717805638>"
+                       "\nhttps://www.patreon.com/joinemm")
+
+    @commands.command()
+    async def info(self, ctx):
+        """Get information about the bot."""
+        appinfo = await self.client.application_info()
+        info_embed = discord.Embed(title='Fansite Tracker Bot',
+                                   description=f'This is a bot for tracking fansites on twitter.\n'
+                                               f'use the help command for a list of commands.\n\n'
+                                               f'Currently tracking {len(self.follow_list)} accounts '
+                                               f'across {len(self.client.guilds)} servers.\n\n'
+                                               f'Author: {appinfo.owner.mention}',
+                                   colour=discord.Colour.magenta())
+        info_embed.add_field(name='Patreon', value="https://www.patreon.com/joinemm", inline=False)
+        info_embed.set_footer(text='version 1.3')
+        info_embed.set_thumbnail(url=self.client.user.avatar_url)
+        await ctx.send(embed=info_embed)
+
 
 def setup(client):
     client.add_cog(TwitterStream(client))
