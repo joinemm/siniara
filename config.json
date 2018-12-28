@@ -1,5 +1,5 @@
 {
-    "refresh_delay": 120,
+    "refresh_delay": 60,
     "channels": {
         "523678921804218369": {
             "textmode": "full"
