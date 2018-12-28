@@ -193,6 +193,7 @@ class TwitterStream:
 
             print(f"Posting tweet from {twitter_user} - {len(media_files)} images")
 
+            posted_text = False
             for file in media_files:
                 content = discord.Embed(colour=int(tweet.user.profile_link_color, 16))
                 content.set_image(url=file[1])
@@ -200,9 +201,11 @@ class TwitterStream:
                                    url=f"https://twitter.com/{tweet.user.screen_name}/status/{tweet.id}")
 
                 for channel in channels:
+                    content.description = None
                     if str(channel) in self.config_json['channels']:
-                        if self.config_json['channels'][str(channel)].get('textmode') == "full":
+                        if self.config_json['channels'][str(channel)].get('textmode') == "full" and not posted_text:
                             content.description = tweet.text
+                            posted_text = True
 
                     await self.client.get_channel(channel).send(embed=content)
 
