@@ -365,8 +365,8 @@ class TwitterStream:
                                  f"queue length = {self.queue.length()}\n"
                                  f"refresh delay = {self.config_json['refresh_delay']}s\n"
                                  f"heartbeat = {self.client.latency*1000:.0f}ms\n"
-                                 f"roundtrip latency = PENDINGms```"
-                                 f"uptime = {d:.0f} days {h:.0f} hours {m:.0f} minutes {s:.0f} seconds\n")
+                                 f"roundtrip latency = PENDINGms/n"
+                                 f"uptime = {d:.0f} days {h:.0f} hours {m:.0f} minutes {s:.0f} seconds```")
 
         latency = (bot_msg.created_at-ctx.message.created_at).total_seconds() * 1000
         await bot_msg.edit(content=bot_msg.content.replace("PENDING", str(latency)))
