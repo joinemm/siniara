@@ -125,6 +125,10 @@ class TwitterStream:
         self.update_follow_ids()
         await self.start_stream()
         while True:
+            if not self.twitter_stream.running:
+                await self.refresh()
+                await self.client.get_channel(508668551658471424).send(f"`Had to reset stream because it wasn't running!`")
+
             try:
                 await self.post_from_queue()
             except Exception as e:
@@ -134,11 +138,14 @@ class TwitterStream:
 
     async def start_stream(self):
         print("Starting stream")
-        # print(f"follows list: {self.follow_list}")
         self.twitter_stream = Stream(auth, MyListener(), tweet_mode='extended')
         self.twitter_stream.filter(follow=self.follow_list, is_async=True)
         self.queue = self.twitter_stream.listener.myQueue
-        await self.client.change_presence(activity=discord.Activity(name=f'{len(self.follow_list)} Fansites', type=3))
+        try:
+            await self.client.change_presence(activity=discord.Activity(name=f'{len(self.follow_list)} Fansites', type=3))
+        except Exception as e:
+            print(e)
+            await self.client.get_channel(508668551658471424).send(f"```{e}```")
 
     def update_follow_ids(self):
         self.follow_dict = refresh_follows()
@@ -146,6 +153,13 @@ class TwitterStream:
         for user in self.follow_dict:
             idlist.append(self.follow_dict[user]['id'])
         self.follow_list = idlist
+
+    async def refresh(self):
+        self.config_json = load_config()
+        self.update_follow_ids()
+        self.twitter_stream.disconnect()
+        del self.twitter_stream
+        await self.start_stream()
 
     async def post_from_queue(self):
         tweet = self.queue.dequeue()
@@ -258,11 +272,7 @@ class TwitterStream:
     @commands.has_permissions(administrator=True)
     async def reset(self, ctx):
         """Reset the stream; refresh follows and settings"""
-        self.config_json = load_config()
-        self.update_follow_ids()
-        self.twitter_stream.disconnect()
-        del self.twitter_stream
-        await self.start_stream()
+        await self.refresh()
         await ctx.send("Stream reset, follow list updated.")
         print("Stream reset")
 
@@ -354,9 +364,10 @@ class TwitterStream:
         bot_msg = await ctx.send(f"```running = {self.twitter_stream.running}\n"
                                  f"queue length = {self.queue.length()}\n"
                                  f"refresh delay = {self.config_json['refresh_delay']}s\n"
-                                 f"uptime = {d:.0f} days {h:.0f} hours {m:.0f} minutes {s:.0f} seconds\n"
                                  f"heartbeat = {self.client.latency*1000:.0f}ms\n"
-                                 f"roundtrip latency = PENDINGms```")
+                                 f"roundtrip latency = PENDINGms```"
+                                 f"uptime = {d:.0f} days {h:.0f} hours {m:.0f} minutes {s:.0f} seconds\n")
+
         latency = (bot_msg.created_at-ctx.message.created_at).total_seconds() * 1000
         await bot_msg.edit(content=bot_msg.content.replace("PENDING", str(latency)))
 
