@@ -14,6 +14,7 @@ from discord.ext import commands
 import asyncio
 import os
 import time
+import logger
 
 consumer_key = os.environ.get("TWITTER_CONSUMER_KEY")
 consumer_secret = os.environ.get("TWITTER_CONSUMER_SECRET")
@@ -23,6 +24,8 @@ access_secret = os.environ.get("TWITTER_ACCESS_SECRET")
 auth = OAuthHandler(consumer_key, consumer_secret)
 auth.set_access_token(access_token, access_secret)
 api = tweepy.API(auth)
+
+logs = logger.create_logger(__name__)
 
 
 def load_config():
@@ -53,7 +56,7 @@ def add_follows(data, channel, usernames):
                 data[user[0]]['channels'].append(int(channel))
         else:
             data[user[0]] = {"id": str(user[1]), "channels": [int(channel)]}
-        print(f"adding user [{user}] to followlist channel [{channel}]")
+        logs.info(f"adding user [{user}] to followlist channel [{channel}]")
 
     with open('follows.json', 'w') as filehandle:
         json.dump(data, filehandle, indent=4)
@@ -62,7 +65,7 @@ def add_follows(data, channel, usernames):
 def remove_follows(data, channel, usernames):
     for user in usernames:
         data[user[0]]['channels'].remove(int(channel))
-        print(f"removing user [{user}] from followlist channel [{channel}]")
+        logs.info(f"removing user [{user}] from followlist channel [{channel}]")
         if len(data[user[0]]['channels']) == 0:
             del(data[user[0]])
 
@@ -77,7 +80,7 @@ class Queue:
 
     # Adding elements to queue
     def enqueue(self, data):
-        print("New tweet queued")
+        logs.info(f"New tweet by {data.user.screen_name} queued")
         self.queue.insert(0, data)
         return True
 
@@ -93,8 +96,9 @@ class Queue:
 
 class MyListener(StreamListener):
 
-    def __init__(self):
+    def __init__(self, follows):
         self.myQueue = Queue()
+        self.follows = follows
         super().__init__()
 
     def on_status(self, status):
@@ -103,14 +107,16 @@ class MyListener(StreamListener):
             status.retweeted_status
         except AttributeError:
             try:
-                self.myQueue.enqueue(status)
+                if str(status.user.id) not in self.follows:
+                    return True
+                else:
+                    self.myQueue.enqueue(status)
             except BaseException as e:
-                print("Error on_data: %s" % str(e))
+                logs.error("on_data: %s" % str(e))
         return True
 
     def on_error(self, status):
-        print("ERROR")
-        print(status)
+        logs.error(status)
         return True
 
 
@@ -132,19 +138,20 @@ class TwitterStream:
             try:
                 await self.post_from_queue()
             except Exception as e:
-                print("Ignoring exception in refresh loop")
-                print(e)
+                logs.error("Ignoring exception in refresh loop")
+                logs.error(e)
+                await self.client.get_channel(508668551658471424).send(f"```{e}```")
             await asyncio.sleep(self.config_json['refresh_delay'])
 
     async def start_stream(self):
-        print("Starting stream")
-        self.twitter_stream = Stream(auth, MyListener(), tweet_mode='extended')
+        logs.info("Starting stream")
+        self.twitter_stream = Stream(auth, MyListener(self.follow_list), tweet_mode='extended')
         self.twitter_stream.filter(follow=self.follow_list, is_async=True)
         self.queue = self.twitter_stream.listener.myQueue
         try:
             await self.client.change_presence(activity=discord.Activity(name=f'{len(self.follow_list)} Fansites', type=3))
         except Exception as e:
-            print(e)
+            logs.error(e)
             await self.client.get_channel(508668551658471424).send(f"```{e}```")
 
     def update_follow_ids(self):
@@ -161,14 +168,33 @@ class TwitterStream:
         del self.twitter_stream
         await self.start_stream()
 
+    def resolve_channel(self, text, guild=None):
+        """Validate channel id. if guild none, don't check
+        :return true, channel_id or false, error_message"""
+        try:
+            channel_id = int(text.replace("<", "").replace(">", "").replace("#", ""))
+        except ValueError:
+            return False, f"ERROR: Invalid channel `{text}`"
+
+        if guild is not None:
+            channel = guild.get_channel(channel_id)
+            if channel is None:
+                return False, f"ERROR: Channel `{channel_id}` not found on this server!"
+
+        return True, channel_id
+
     async def post_from_queue(self):
         tweet = self.queue.dequeue()
-        #print(tweet)
         if tweet is not None:
+            try:
+                tweet_text = tweet.extended_tweet['full_text']
+            except AttributeError:
+                words = tweet.text.split(" ")
+                if "t.co/" in words[-1]:
+                    del words[-1]
+                tweet_text = " ".join(words)
+
             twitter_user = tweet.user.screen_name
-            if twitter_user not in self.follow_dict:
-                print(f"skipping user [{twitter_user}] not found in follow list")
-                return
             channels = self.follow_dict[twitter_user]['channels']
 
             media_files = []
@@ -179,14 +205,14 @@ class TwitterStream:
                 content = discord.Embed(colour=int(tweet.user.profile_link_color, 16))
                 for channel in channels:
                     if str(channel) in self.config_json['channels']:
-                        if self.config_json['channels'][str(channel)].get('textmode') == "none":
-                            print(f"Skipping text post for {channel}")
+                        if self.config_json['channels'][str(channel)].get('textmode') == "full":
                             continue
-                    content.description = tweet.text
+                    content.description = tweet_text
                     content.set_author(icon_url=tweet.user.profile_image_url,
                                        name=f"@{tweet.user.screen_name}",
                                        url=f"https://twitter.com/{tweet.user.screen_name}/status/{tweet.id}")
                     await self.client.get_channel(channel).send(embed=content)
+                    logs.info(logger.post_log(self.client.get_channel(channel), twitter_user, "text"))
                 return
             hashtags = []
             for hashtag in tweet.entities.get('hashtags', []):
@@ -205,8 +231,6 @@ class TwitterStream:
                                 media_url = video_urls[x]['url']
                 media_files.append((" ".join(hashtags), media_url, video_url))
 
-            print(f"Posting tweet from {twitter_user} - {len(media_files)} images")
-
             posted_text = False
             for file in media_files:
                 content = discord.Embed(colour=int(tweet.user.profile_link_color, 16))
@@ -216,16 +240,20 @@ class TwitterStream:
 
                 for channel in channels:
                     content.description = None
-                    if str(channel) in self.config_json['channels']:
-                        if self.config_json['channels'][str(channel)].get('textmode') == "full" and not posted_text:
-                            content.description = tweet.text
-                            posted_text = True
+                    if not posted_text and str(channel) in self.config_json['channels']:
+                        if not self.config_json['channels'][str(channel)].get('textmode') == "none":
+                            content.description = tweet_text
 
                     await self.client.get_channel(channel).send(embed=content)
 
                     if file[2] is not None:
                         # content.description = f"Contains video/gif [Click here to view]({file[2]})"
                         await self.client.get_channel(channel).send(file[2])
+                        logs.info(logger.post_log(self.client.get_channel(channel), twitter_user, "video"))
+                    else:
+                        logs.info(logger.post_log(self.client.get_channel(channel), twitter_user, "image"))
+
+                posted_text = True
 
     # --commands
 
@@ -233,7 +261,10 @@ class TwitterStream:
     @commands.has_permissions(administrator=True)
     async def add(self, ctx, channel, *usernames):
         """Add an account to the follow list"""
-        if ctx.message.guild.get_channel(int(channel)) is not None:
+        logs.info(logger.command_log(ctx))
+
+        resolved, channel_id = self.resolve_channel(channel, ctx.message.guild)
+        if resolved:
             to_add = []
             for username in usernames:
                 try:
@@ -241,52 +272,58 @@ class TwitterStream:
                     to_add.append((user.screen_name, user.id))
                 except Exception:
                     await ctx.send(f"Error adding user `{username}`")
-                    print(f"Error adding user {username}")
+                    logs.error(f"Error adding user {username}")
             if to_add:
-                add_follows(self.follow_dict, channel, to_add)
-                await ctx.send(f"{len(to_add)} new users added to follow list of <#{channel}>. Will apply on next reset.")
+                add_follows(self.follow_dict, str(channel_id), to_add)
+                await ctx.send(f"{len(to_add)} new users added to follow list of <#{channel_id}>. Will apply on next reset.")
         else:
-            await ctx.send(f"Channel `{channel}` not found on this server!")
+            await ctx.send(channel_id)
 
     @commands.command()
     @commands.has_permissions(administrator=True)
     async def remove(self, ctx, channel, *usernames):
         """Remove an account from the follow list"""
-        if ctx.message.guild.get_channel(int(channel)) is not None:
+        logs.info(logger.command_log(ctx))
+
+        resolved, channel_id = self.resolve_channel(channel, ctx.message.guild)
+        if resolved:
             to_remove = []
             for username in usernames:
                 try:
                     user = api.get_user(screen_name=username)
-                    if int(channel) in self.follow_dict[user.screen_name]['channels']:
+                    if channel_id in self.follow_dict[user.screen_name]['channels']:
                         to_remove.append((user.screen_name, user.id))
                 except Exception:
                     await ctx.send(f"Error adding user `{username}`")
-                    print(f"Error adding user {username}")
+                    logs.error(f"Error adding user {username}")
             if to_remove:
-                remove_follows(self.follow_dict, channel, to_remove)
-                await ctx.send(f"{len(to_remove)} users removed from follow list of <#{channel}>. Will apply on next reset.")
+                remove_follows(self.follow_dict, str(channel_id), to_remove)
+                await ctx.send(f"{len(to_remove)} users removed from follow list of <#{channel_id}>. Will apply on next reset.")
         else:
-            await ctx.send(f"Channel `{channel}` not found on this server!")
+            await ctx.send(channel_id)
 
     @commands.command()
     @commands.has_permissions(administrator=True)
     async def reset(self, ctx):
         """Reset the stream; refresh follows and settings"""
+        logs.info(logger.command_log(ctx))
+
         await self.refresh()
         await ctx.send("Stream reset, follow list updated.")
-        print("Stream reset")
 
     @commands.command()
     @commands.has_permissions(administrator=True)
     async def config(self, ctx, param1=None, param2=None, param3=None):
         """Configure bot options."""
+        logs.info(logger.command_log(ctx))
+
         if param1 == "help" or param1 is None:
             await ctx.send("`>config [channel] [setting] [value]`\n"
                            "**settings:** `[textmode | refresh]`\n"
                            "- **textmode:** `[none | partial | full]`\n"
                            "-- `none`: images are posted without text and text-only posts are skipped\n"
-                           "-- `partial`: images are posted without text but text-only posts are posted normally\n"
-                           "-- `full`: (default) everything is posted with all the text\n"
+                           "-- `partial`: (default) images are posted with text but text-only posts are skipped\n"
+                           "-- `full`: everything is posted with all the text\n"
                            "- **refresh:** time in seconds to wait before checking the queue again for another tweet.\n\n"
                            "example: `>config 124567891069420 textmode full`")
             return
@@ -294,15 +331,15 @@ class TwitterStream:
             if ctx.message.author.id == 133311691852218378:
                 self.config_json['refresh_delay'] = int(param2)
                 save_config(self.config_json)
-                print(f"Set refresh delay to {param2}")
+                logs.info(f"Set refresh delay to {param2}")
                 await ctx.send(f"Set refresh delay to `{param2}`")
                 return
             else:
                 await ctx.send("ERROR: You are not allowed to change this setting.")
 
-        channel = ctx.message.guild.get_channel(int(param1))
-        if channel is None:
-            await ctx.send(f"ERROR: Channel `{param1}` not found on this server!")
+        resolved, channel = self.resolve_channel(param1, ctx.message.guild)
+        if not resolved:
+            await ctx.send(channel)
             return
         if param2 == "textmode":
             if param3 in ["full", "partial", "none"]:
@@ -310,7 +347,7 @@ class TwitterStream:
                     self.config_json['channels'][param1] = {}
                 self.config_json['channels'][param1]['textmode'] = param3
                 save_config(self.config_json)
-                print(f"Set textmode for {channel.name} as {param3}")
+                logs.info(f"Set textmode for {channel.name} as {param3}")
                 await ctx.send(f"Set textmode for {channel.mention} to `{param3}`")
                 return
             else:
@@ -322,7 +359,8 @@ class TwitterStream:
     @commands.command()
     async def list(self, ctx, page=1):
         """List the currently followed accounts on this server."""
-        print("Listing followed users")
+        logs.info(logger.command_log(ctx))
+
         nothing = True
         pages = []
         added = 20
@@ -356,6 +394,8 @@ class TwitterStream:
     @commands.command()
     async def status(self, ctx):
         """Get the bot's status"""
+        logs.info(logger.command_log(ctx))
+
         up_time = time.time() - self.start_time
         m, s = divmod(up_time, 60)
         h, m = divmod(m, 60)
@@ -365,7 +405,7 @@ class TwitterStream:
                                  f"queue length = {self.queue.length()}\n"
                                  f"refresh delay = {self.config_json['refresh_delay']}s\n"
                                  f"heartbeat = {self.client.latency*1000:.0f}ms\n"
-                                 f"roundtrip latency = PENDINGms/n"
+                                 f"roundtrip latency = PENDINGms\n"
                                  f"uptime = {d:.0f} days {h:.0f} hours {m:.0f} minutes {s:.0f} seconds```")
 
         latency = (bot_msg.created_at-ctx.message.created_at).total_seconds() * 1000
@@ -374,12 +414,16 @@ class TwitterStream:
     @commands.command()
     async def patreon(self, ctx):
         """Get a link to the patreon page."""
+        logs.info(logger.command_log(ctx))
+
         await ctx.send("Consider joining my patreon to help with server upkeep costs <:vivismirk2:523308548717805638>"
                        "\nhttps://www.patreon.com/joinemm")
 
     @commands.command()
     async def info(self, ctx):
         """Get information about the bot."""
+        logs.info(logger.command_log(ctx))
+
         appinfo = await self.client.application_info()
         info_embed = discord.Embed(title='Fansite Tracker Bot',
                                    description=f'This is a bot for tracking fansites on twitter.\n'
