@@ -343,12 +343,12 @@ class TwitterStream:
             return
         if param2 == "textmode":
             if param3 in ["full", "partial", "none"]:
-                if param1 not in self.config_json['channels']:
-                    self.config_json['channels'][param1] = {}
-                self.config_json['channels'][param1]['textmode'] = param3
+                if channel not in self.config_json['channels']:
+                    self.config_json['channels'][channel] = {}
+                self.config_json['channels'][channel]['textmode'] = param3
                 save_config(self.config_json)
-                logs.info(f"Set textmode for {channel.name} as {param3}")
-                await ctx.send(f"Set textmode for {channel.mention} to `{param3}`")
+                logs.info(f"Set textmode for {channel} as {param3}")
+                await ctx.send(f"Set textmode for <#{channel}> to `{param3}`")
                 return
             else:
                 await ctx.send(f"ERROR: Invalid parameter `{param3}` for setting `{param2}`. use `>config help` for help.")
