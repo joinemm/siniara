@@ -308,6 +308,10 @@ class TwitterStream:
         """Reset the stream; refresh follows and settings"""
         logs.info(logger.command_log(ctx))
 
+        if not self.queue.length() == 0:
+            await ctx.send(f"WARNING: there are currently ({self.queue.length()}) posts in queue. "
+                           f"resetting would clear the queue!\nPlease wait for the queue to clear.")
+            return
         await self.refresh()
         await ctx.send("Stream reset, follow list updated.")
 
@@ -325,7 +329,7 @@ class TwitterStream:
                            "-- `partial`: (default) images are posted with text but text-only posts are skipped\n"
                            "-- `full`: everything is posted with all the text\n"
                            "- **refresh:** time in seconds to wait before checking the queue again for another tweet.\n\n"
-                           "example: `>config 124567891069420 textmode full`")
+                           "example: `>config #textchannel textmode full`")
             return
         elif param1 == "refresh":
             if ctx.message.author.id == 133311691852218378:
