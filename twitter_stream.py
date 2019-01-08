@@ -205,7 +205,7 @@ class TwitterStream:
                 content = discord.Embed(colour=int(tweet.user.profile_link_color, 16))
                 for channel in channels:
                     if str(channel) in self.config_json['channels']:
-                        if self.config_json['channels'][str(channel)].get('textmode') == "full":
+                        if not self.config_json['channels'][str(channel)].get('textmode') == "full":
                             continue
                     content.description = tweet_text
                     content.set_author(icon_url=tweet.user.profile_image_url,
