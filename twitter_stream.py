@@ -23,7 +23,7 @@ access_secret = os.environ.get("TWITTER_ACCESS_SECRET")
 
 auth = OAuthHandler(consumer_key, consumer_secret)
 auth.set_access_token(access_token, access_secret)
-api = tweepy.API(auth)
+api = tweepy.API(auth, wait_on_rate_limit=True)
 
 logs = logger.create_logger(__name__)
 
@@ -115,8 +115,8 @@ class MyListener(StreamListener):
                 logs.error("on_data: %s" % str(e))
         return True
 
-    def on_error(self, status):
-        logs.error(status)
+    def on_error(self, status_code):
+        print(status_code)
         return True
 
 
