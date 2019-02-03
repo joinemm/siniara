@@ -110,10 +110,7 @@ class StreamCog:
             post_text = tweet.text
         for word in post_text.split(" "):
             if "t.co/" not in word:
-                if "#" in word:
-                    text.append(f"[{word}](https://twitter.com/hashtag/{word.strip('#')})")
-                else:
-                    text.append(word)
+                text.append(word)
 
         tweet_text = " ".join(text)
 
