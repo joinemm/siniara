@@ -1,3 +1,9 @@
+# Project: Joinemm-Bot
+# File: logger.py
+# Author: Joinemm
+# Date created: 16/12/18
+# Python Version: 3.6
+
 import logging
 
 

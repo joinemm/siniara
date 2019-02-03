@@ -1,3 +1,9 @@
+# Project: Joinemm-Bot
+# File: database.py
+# Author: Joinemm
+# Date created: 02/02/19
+# Python Version: 3.6
+
 # modified version of Miso bot database
 
 import json

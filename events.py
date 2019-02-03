@@ -30,18 +30,18 @@ class Events:
             return
         elif isinstance(error, commands.DisabledCommand):
             print(str(error))
-            await ctx.send(f'ERROR: {ctx.command} has been disabled.')
+            await ctx.send(f'ERROR: `{ctx.command}` has been disabled.')
             return
         elif isinstance(error, commands.NoPrivateMessage):
             print(str(error))
             try:
-                return await ctx.author.send(f'ERROR: {ctx.command} can not be used in Private Messages.')
+                return await ctx.author.send(f'ERROR: `{ctx.command}` can not be used in Private Messages.')
             except Exception:
                 pass
             return
         elif isinstance(error, commands.NotOwner):
             print(str(error))
-            await ctx.send("Sorry, only the owner (Joinemm#1998) can use this command!")
+            await ctx.send("Sorry, only my owner (Joinemm#1998) can use this command!")
             return
         elif isinstance(error, commands.MissingPermissions):
             print(str(error))
@@ -53,7 +53,7 @@ class Events:
             return
         elif isinstance(error, commands.CommandOnCooldown):
             print(str(error))
-            await ctx.send(f"This command is on cooldown! please wait {error.retry_after} seconds")
+            await ctx.send(f"This command is on cooldown! please wait **{int(error.retry_after)}** seconds")
             return
         else:
             print(f'Ignoring exception in command {ctx.command}:')
