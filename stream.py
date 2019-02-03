@@ -85,6 +85,13 @@ class StreamCog:
         self.twitterStream = Stream(auth, Listener(self.client, self), tweet_mode='extended')
         self.twitterStream.filter(follow=utils.get_follow_ids(), is_async=True)
 
+    async def update_activity(self):
+        await self.client.change_presence(activity=discord.Activity(name=f'{len(utils.get_follow_ids())} Fansites',
+                                                                    type=3))
+
+    async def on_ready(self):
+        await self.update_activity()
+
     async def report_error(self, data):
         channel = self.client.get_channel(508668551658471424)
         if channel is None:
@@ -227,6 +234,7 @@ class StreamCog:
         log.info(logger.command_log(ctx))
 
         self.refresh()
+        await self.update_activity()
         await ctx.send("TwitterStream reinitialized, follow list updated")
 
     @commands.command()
