@@ -36,7 +36,7 @@ class Events:
             print(str(error))
             try:
                 return await ctx.author.send(f'ERROR: {ctx.command} can not be used in Private Messages.')
-            except:
+            except Exception:
                 pass
             return
         elif isinstance(error, commands.NotOwner):
@@ -50,6 +50,10 @@ class Events:
         elif isinstance(error, commands.BotMissingPermissions):
             print(str(error))
             await ctx.send(f"ERROR: I am missing the required permissions to execute this command!")
+            return
+        elif isinstance(error, commands.CommandOnCooldown):
+            print(str(error))
+            await ctx.send(f"This command is on cooldown! please wait {error.retry_after} seconds")
             return
         else:
             print(f'Ignoring exception in command {ctx.command}:')

@@ -1,0 +1,20 @@
+{
+    "channels": {
+        "523678921804218369": {
+            "text_posts": true,
+            "include_text": true
+        },
+        "524322299621539841": {
+            "text_posts": false,
+            "include_text": true
+        },
+        "<#503907219897581579>": {
+            "text_posts": true,
+            "include_text": true
+        },
+        "503907219897581579": {
+            "text_posts": true,
+            "include_text": true
+        }
+    }
+}
