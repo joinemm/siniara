@@ -164,7 +164,7 @@ class StreamCog:
         posted_text = False
         for file in media_files:
             content = discord.Embed(colour=int(tweet.user.profile_link_color, 16))
-            content.set_image(url=file[1])
+            content.set_image(url=file[1] + ":orig")
             content.set_author(icon_url=tweet.user.profile_image_url, name=f"@{tweet.user.screen_name}\n{file[0]}",
                                url=f"https://twitter.com/{tweet.user.screen_name}/status/{tweet.id}")
 
