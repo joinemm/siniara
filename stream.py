@@ -16,6 +16,7 @@ import os
 import main
 import utils
 import time
+import re
 
 database = main.database
 log = logger.create_logger(__name__)
@@ -171,7 +172,11 @@ class StreamCog:
             for channel_id in channels:
                 content.description = None
                 if posted_text is False and database.get_attr("config", f"channels.{channel_id}.include_text", True):
-                    content.description = tweet_text
+                    if database.get_attr("config", f"channels.{channel_id}.format", False):
+                        number = " | ".join(re.findall(r'(\d{6})', tweet_text))
+                        content.description = f"`@{tweet.user.screen_name} | {number}`"
+                    else:
+                        content.description = tweet_text
 
                 channel = self.client.get_channel(id=channel_id)
                 if channel is None:

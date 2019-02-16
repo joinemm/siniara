@@ -44,7 +44,7 @@ class Commands:
 
         if param1 == "help" or param1 is None:
             await ctx.send("`$config [channel] [setting] [True | False]`\n"
-                           "**settings:** `[textposts | imagetext]`\n")
+                           "**settings:** `[textposts | imagetext | fansiteformatting]`\n")
             return
         else:
             channel = utils.channel_from_mention(ctx.guild, param1)
@@ -59,6 +59,8 @@ class Commands:
             else:
                 await ctx.send(f"ERROR: Invalid parameter `{param3}`. Use `true` or `false`")
                 return
+            await ctx.send(f"Set textpost mode for {channel.mention} to `{param3.lower()}`")
+
         elif param2 == "imagetext":
             if param3.lower() == "true":
                 main.database.set_attr("config", f"channels.{channel.id}.include_text", True)
@@ -67,6 +69,18 @@ class Commands:
             else:
                 await ctx.send(f"ERROR: Invalid parameter `{param3}`. Use `true` or `false`")
                 return
+            await ctx.send(f"Set imagetext mode for {channel.mention} to `{param3.lower()}`")
+
+        elif param2 == "fansiteformatting":
+            if param3.lower() == "true":
+                main.database.set_attr("config", f"channels.{channel.id}.format", True)
+            elif param3.lower() == "false":
+                main.database.set_attr("config", f"channels.{channel.id}.format", False)
+            else:
+                await ctx.send(f"ERROR: Invalid parameter `{param3}`. Use `true` or `false`")
+                return
+            await ctx.send(f"Set fansite formatting mode for {channel.mention} to `{param3.lower()}`")
+
         else:
             settings = main.database.get_attr("config", f"channels.{channel.id}")
             await ctx.send(f"Current settings for {channel.mention}\n```{settings}```")
