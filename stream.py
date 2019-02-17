@@ -173,8 +173,12 @@ class StreamCog:
                 content.description = None
                 if posted_text is False and database.get_attr("config", f"channels.{channel_id}.include_text", True):
                     if database.get_attr("config", f"channels.{channel_id}.format", False):
-                        number = " | ".join(re.findall(r'(\d{6})', tweet_text))
-                        content.description = f"`@{tweet.user.screen_name} | {number}`"
+                        nums = re.findall(r'(\d{6})', tweet_text)
+                        if nums:
+                            number = " | ".join(nums)
+                            content.description = f"`@{tweet.user.screen_name} | {number}`"
+                        else:
+                            content.description = tweet_text
                     else:
                         content.description = tweet_text
 
