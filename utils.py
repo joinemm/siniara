@@ -24,9 +24,8 @@ def add_fansite(username, channel_id):
     except tweepy.error.TweepError as e:
         return e.args[0][0]['code']
 
-    database.append_attr("follows", f"{user.id}.channels", channel_id)
     database.set_attr("follows", f"{user.id}.username", user.screen_name)
-    return True
+    return database.append_attr("follows", f"{user.id}.channels", channel_id)
 
 
 def remove_fansite(username, channel_id):

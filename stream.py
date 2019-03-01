@@ -211,7 +211,9 @@ class StreamCog:
         for username in usernames:
             response = utils.add_fansite(username, channel.id)
             if response is True:
-                await ctx.send(f"Added `{username}` to {channel.mention}. Use $reset to apply changes")
+                await ctx.send(f"Added `{username}` to {channel.mention}. Use $reset to apply changes.")
+            elif response is False:
+                await ctx.send(f"`{username}` already exists in {channel.mention}, skipping.")
             else:
                 await ctx.send(f"Error adding `{username}`: `{response}`")
 
