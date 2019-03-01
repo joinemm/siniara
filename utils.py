@@ -25,7 +25,7 @@ def add_fansite(username, channel_id):
         return e.args[0][0]['code']
 
     database.set_attr("follows", f"{user.id}.username", user.screen_name)
-    return database.append_attr("follows", f"{user.id}.channels", channel_id)
+    return database.append_attr("follows", f"{user.id}.channels", channel_id, duplicate=False)
 
 
 def remove_fansite(username, channel_id):
