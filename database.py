@@ -33,9 +33,9 @@ class Datafile:
 
     def append_data(self, keys, value, duplicate):
         path_to = reduce(create_key, keys[:-1], self.get_data())
-        if duplicate is False and value in path_to:
-            return False
         if keys[-1] in path_to:
+            if duplicate is False and value in path_to[keys[-1]]:
+                return False
             path_to[keys[-1]].append(value)
         else:
             path_to[keys[-1]] = [value]
