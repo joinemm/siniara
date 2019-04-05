@@ -15,6 +15,14 @@
         "503907219897581579": {
             "text_posts": true,
             "include_text": true
+        },
+        "536563506372280340": {
+            "text_posts": true,
+            "include_text": true
+        },
+        "546335365263392794": {
+            "text_posts": false,
+            "format": true
         }
     }
 }
