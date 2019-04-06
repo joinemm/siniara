@@ -25,11 +25,11 @@ class Commands(commands.Cog):
         appinfo = await self.client.application_info()
         info_embed = discord.Embed(title="Fansite Bot | version 3.0",
                                    description=f"Created by {appinfo.owner.mention}\n\n"
-                                   f'This is a bot mainly made for tracking kpop fansites on twitter. '
-                                   f'Also works fine as a general twitter streamer.\n'
+                                   f'This is a bot mainly made for tracking kpop fansites on twitter, but it works '
+                                   f'just fine for any twitter accounts.\n'
                                    f'use `{self.client.command_prefix}help` for the list of commands.\n\n'
-                                   f'Currently tracking {len(db.get_user_ids())} accounts '
-                                   f'across {len(self.client.guilds)} servers.\n\n',
+                                   f'Currently following **{len(db.get_user_ids())}** accounts '
+                                   f'across **{len(self.client.guilds)}** servers.\n\n',
                                    colour=discord.Color.blue())
         info_embed.add_field(name='Github', value='https://github.com/joinemm/fansite-bot', inline=False)
         info_embed.add_field(name='Patreon', value="https://www.patreon.com/joinemm", inline=False)
