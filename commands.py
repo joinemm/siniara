@@ -8,7 +8,6 @@ import discord
 from discord.ext import commands
 import utils
 import database as db
-import json
 
 
 class Commands(commands.Cog):
@@ -22,12 +21,11 @@ class Commands(commands.Cog):
         appinfo = await self.client.application_info()
         info_embed = discord.Embed(title="Fansite Bot | version 3.0",
                                    description=f"Created by {appinfo.owner.mention}\n\n"
-                                   f'This is a bot mainly made for tracking kpop fansites on twitter.'
+                                   f'This is a bot mainly made for tracking kpop fansites on twitter. '
                                    f'Also works fine as a general twitter streamer.\n'
                                    f'use `{self.client.command_prefix}help` for the list of commands.\n\n'
                                    f'Currently tracking {len(db.get_user_ids())} accounts '
-                                   f'across {len(self.client.guilds)} servers.\n\n'
-                                   f'Author: {appinfo.owner.mention}',
+                                   f'across {len(self.client.guilds)} servers.\n\n',
                                    colour=discord.Color.blue())
         info_embed.add_field(name='Github', value='https://github.com/joinemm/fansite-bot', inline=False)
         info_embed.add_field(name='Patreon', value="https://www.patreon.com/joinemm", inline=False)
@@ -44,8 +42,17 @@ class Commands(commands.Cog):
 
     @commands.group()
     @commands.has_permissions(administrator=True)
-    async def config(self, ctx, channel):
+    async def config(self, ctx, channel=None):
         """Configure bot options."""
+        if channel is None:
+            return await ctx.send_help(ctx.command.name)
+
+        this_channel = await utils.get_channel(ctx, channel)
+        if this_channel is None:
+            return await ctx.send(f"Invalid channel `{channel}`")
+
+        ctx.the_channel = this_channel
+
         if ctx.invoked_subcommand is None or isinstance(ctx.invoked_subcommand, commands.Group):
             this_channel = await utils.get_channel(ctx, channel)
             if this_channel is None:
@@ -58,46 +65,34 @@ class Commands(commands.Cog):
                            f"Images as links : {settings.image_links == 1}```")
 
     @config.command()
-    async def textposts(self, ctx, channel, value):
+    async def textposts(self, ctx, value):
         """Allow text only posts?"""
-        this_channel = await utils.get_channel(ctx, channel)
-        if this_channel is None:
-            return await ctx.send(f"Invalid channel `{channel}`")
-
         value = text_to_int_bool(value)
         if value is None:
             return await ctx.send(f"Invalid value `{value}`. Use `true` or `false`")
 
-        db.change_setting(this_channel.id, 'text_posts', value)
-        await ctx.send(f"Textposts in {channel.mention} `{'enabled' if value == 1 else 'disabled'}`")
+        db.change_setting(ctx.the_channel.id, 'text_posts', value)
+        await ctx.send(f"Textposts in {ctx.the_channel.mention} `{'enabled' if value == 1 else 'disabled'}`")
 
     @config.command()
-    async def imagetext(self, ctx, channel, value):
+    async def imagetext(self, ctx, value):
         """Have tweet text with images?"""
-        this_channel = await utils.get_channel(ctx, channel)
-        if this_channel is None:
-            return await ctx.send(f"Invalid channel `{channel}`")
-
         value = text_to_int_bool(value)
         if value is None:
             return await ctx.send(f"Invalid value `{value}`. Use `true` or `false`")
 
-        db.change_setting(this_channel.id, 'image_text', value)
-        await ctx.send(f"Image text in {channel.mention} `{'enabled' if value == 1 else 'disabled'}`")
+        db.change_setting(ctx.the_channel.id, 'image_text', value)
+        await ctx.send(f"Image text in {ctx.the_channel.mention} `{'enabled' if value == 1 else 'disabled'}`")
 
     @config.command()
-    async def imagelinks(self, ctx, channel, value):
+    async def imagelinks(self, ctx, value):
         """Post images as links instead of embeds?"""
-        this_channel = await utils.get_channel(ctx, channel)
-        if this_channel is None:
-            return await ctx.send(f"Invalid channel `{channel}`")
-
         value = text_to_int_bool(value)
         if value is None:
             return await ctx.send(f"Invalid value `{value}`. Use `true` or `false`")
 
-        db.change_setting(this_channel.id, 'image_links', value)
-        await ctx.send(f"Images as links in {channel.mention} `{'enabled' if value == 1 else 'disabled'}`")
+        db.change_setting(ctx.the_channel.id, 'image_links', value)
+        await ctx.send(f"Images as links in {ctx.the_channel.mention} `{'enabled' if value == 1 else 'disabled'}`")
 
     @commands.command()
     async def list(self, ctx, channel=None):
@@ -144,18 +139,6 @@ class Commands(commands.Cog):
             await utils.page_switcher(ctx, pages)
         else:
             await ctx.send(embed=pages[0])
-
-    @commands.command()
-    @commands.is_owner()
-    async def convert(self, ctx):
-        with open("data/follows.json", "r") as f:
-            data = json.load(f)
-
-            for user_id in data:
-                for channel_id in data[user_id]['channels']:
-                    db.execute("REPLACE INTO follows (channel_id, user_id, username) values (?, ?, ?)",
-                               (channel_id, user_id, data[user_id]['username']))
-        await ctx.send("yes")
 
 
 def setup(client):
