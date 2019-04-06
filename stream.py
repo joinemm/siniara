@@ -155,7 +155,7 @@ class Streamer(commands.Cog):
                 nums = re.findall(r'(\d{6})', post_text)
                 number = " | ".join(nums)
                 images = '\n'.join([x[1] + (":orig" if x[0] == 'photo' else "") for x in mediafiles])
-                await channel.send(f"```\n{number} | @{tweet.user.screen_name}```"
+                await channel.send(f"```java\n{number} | @{tweet.user.screen_name}```"
                                    f"{images}")
 
             else:
