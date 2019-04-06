@@ -105,6 +105,16 @@ class Streamer(commands.Cog):
         await channel.send(str(data))
 
     async def send_tweet(self, tweet):
+        # send to channels
+        for channel_id in db.get_channels(tweet.user.id):
+            channel = self.client.get_channel(id=channel_id)
+            if channel is None:
+                logger.error(f"Unable to get channel {channel_id} for user {tweet.user.screen_name}")
+                continue
+
+            await self.send_tweet_embed(channel, tweet)
+
+    async def send_tweet_embed(self, channel, tweet, automatic=True):
         post_text = tweet.full_text
         # remove shortened links and add expanded ones
         post_text = re.sub(r'\S*t\.co/\S*', '', post_text).strip()
@@ -131,54 +141,48 @@ class Streamer(commands.Cog):
         except AttributeError:
             pass
 
-        # send to channels
-        for channel_id in db.get_channels(tweet.user.id):
-            channel = self.client.get_channel(id=channel_id)
-            if channel is None:
-                logger.error(f"Unable to get channel {channel_id} for user {tweet.user.screen_name}")
+        channel_settings = db.get_channel_settings(channel.id)
 
-            # get settings
-            channel_settings = db.get_channel_settings(channel_id)
+        content = discord.Embed(colour=int(tweet.user.profile_link_color, 16))
+        content.set_author(icon_url=tweet.user.profile_image_url_https,
+                           name=f"@{tweet.user.screen_name}",
+                           url=f"https://twitter.com/{tweet.user.screen_name}/status/{tweet.id}")
 
-            content = discord.Embed(colour=int(tweet.user.profile_link_color, 16))
-            content.set_author(icon_url=tweet.user.profile_image_url_https,
-                               name=f"@{tweet.user.screen_name}",
-                               url=f"https://twitter.com/{tweet.user.screen_name}/status/{tweet.id}")
+        if mediafiles:
 
-            if mediafiles:
-
-                if channel_settings.image_links == 1:
-                    # post fansite formatting, eg. @joinemm | 190406
-                    nums = re.findall(r'(\d{6})', post_text)
-                    number = " | ".join(nums)
-                    images = '\n'.join([x[1] + (":orig" if x[0] == 'photo' else "") for x in mediafiles])
-                    await channel.send(f"`@{tweet.user.screen_name} | {number}`\n{images}")
-
-                else:
-                    if channel_settings.image_text == 1:
-                        content.description = post_text
-
-                    for i, file in enumerate(mediafiles):
-                        if file[0] == 'photo':
-                            content.set_image(url=file[1] + ":orig")
-                            await channel.send(embed=content)
-                        else:
-                            content._image = None
-                            await channel.send(embed=content)
-                            await channel.send(file[1])
-
-                        if i == 0:
-                            content.description = None
-                            content._author = None
-
-            elif channel_settings.text_posts == 1:
-                content.description = post_text
-                await channel.send(embed=content)
+            if channel_settings.image_links == 1:
+                # post fansite formatting, eg. @joinemm | 190406
+                nums = re.findall(r'(\d{6})', post_text)
+                number = " | ".join(nums)
+                images = '\n'.join([x[1] + (":orig" if x[0] == 'photo' else "") for x in mediafiles])
+                await channel.send(f"`@{tweet.user.screen_name} | {number}`\n{images}")
 
             else:
-                continue
-            # add stats
-            db.add_tweet(channel_id, tweet.user.id, len(mediafiles))
+                if channel_settings.image_text == 1:
+                    content.description = post_text
+
+                for i, file in enumerate(mediafiles):
+                    if file[0] == 'photo':
+                        content.set_image(url=file[1] + ":orig")
+                        await channel.send(embed=content)
+                    else:
+                        content._image = None
+                        await channel.send(embed=content)
+                        await channel.send(file[1])
+
+                    if i == 0:
+                        content.description = None
+                        content._author = None
+
+        elif channel_settings.text_posts == 1:
+            content.description = post_text
+            await channel.send(embed=content)
+
+        else:
+            return
+
+        if automatic:
+            db.add_tweet(channel.id, tweet.user.id, len(mediafiles))
             logger.info(log.tweet(channel, tweet.user.screen_name, len(mediafiles)))
 
     async def statushandler(self, status):
@@ -224,6 +228,14 @@ class Streamer(commands.Cog):
             await ctx.send('Use `$reset` to apply changes.')
 
     # ~~ COMMANDS ~~
+
+    @commands.command()
+    async def get(self, ctx, tweet_id):
+        if "status" in tweet_id:
+            tweet_id = re.search(r'status/(\d+)', tweet_id).group(1)
+
+        tweet = api.get_status(tweet_id, tweet_mode='extended', include_entities=True)
+        await self.send_tweet_embed(ctx.channel, tweet)
 
     @commands.command(name='add')
     @commands.has_permissions(administrator=True)
