@@ -1,64 +1,67 @@
-# Project: Joinemm-Bot
+# Project: Fansite Bot
 # File: events.py
 # Author: Joinemm
-# Date created: 17/12/18
+# Date created: 06/04/19
 # Python Version: 3.6
 
 import traceback
 from discord.ext import commands
+import logger as log
+
+logger = log.get_logger(__name__)
 
 
-class Events:
+class Events(commands.Cog):
 
     def __init__(self, client):
         self.client = client
 
+    @commands.Cog.listener()
     async def on_command_error(self, ctx, error):
-        """The event triggered when an error is raised while invoking a command"""
+        """The event triggered when an error is raised while invoking a command.
+        ctx   : Context
+        error : Exception"""
 
-        # This prevents any commands with local handlers being handled here in on_command_error.
         if hasattr(ctx.command, 'on_error'):
             return
 
-        # Allows us to check for original exceptions raised and sent to CommandInvokeError.
-        # If nothing is found. We keep the exception passed to on_command_error.
         error = getattr(error, 'original', error)
 
-        # Anything in ignored will return and prevent anything happening.
         if isinstance(error, commands.CommandNotFound):
-            print(str(error))
             return
-        elif isinstance(error, commands.DisabledCommand):
-            print(str(error))
-            await ctx.send(f'ERROR: `{ctx.command}` has been disabled.')
-            return
+
+        if isinstance(error, commands.DisabledCommand):
+            logger.error(str(error))
+            return await ctx.send(f'{ctx.command} has been disabled.')
+
         elif isinstance(error, commands.NoPrivateMessage):
-            print(str(error))
-            try:
-                return await ctx.author.send(f'ERROR: `{ctx.command}` can not be used in Private Messages.')
-            except Exception:
-                pass
-            return
+            logger.error(str(error))
+            return await ctx.author.send(f'{ctx.command} can not be used in Private Messages.')
+
         elif isinstance(error, commands.NotOwner):
-            print(str(error))
-            await ctx.send("Sorry, only my owner (Joinemm#1998) can use this command!")
-            return
+            logger .error(str(error))
+            owner = await self.client.application_info().owner
+            return await ctx.send(f"Sorry, this command usable by the bot owner only! (**{owner}**)")
+
         elif isinstance(error, commands.MissingPermissions):
-            print(str(error))
-            await ctx.send(f"ERROR: You are missing the required permissions to use this command!")
-            return
+            logger.error(str(error))
+            perms = ', '.join([f"**{x}**" for x in error.missing_perms])
+            return await ctx.send(f"You are missing the required permissions to use this command: {perms}")
+
         elif isinstance(error, commands.BotMissingPermissions):
-            print(str(error))
-            await ctx.send(f"ERROR: I am missing the required permissions to execute this command!")
-            return
-        elif isinstance(error, commands.CommandOnCooldown):
-            print(str(error))
-            await ctx.send(f"This command is on cooldown! please wait **{int(error.retry_after)}** seconds")
-            return
+            logger.error(str(error))
+            perms = ', '.join([f"**{x}**" for x in error.missing_perms])
+            return await ctx.send(f"I am missing the required permissions to execute this command: {perms}")
+
+        elif isinstance(error, commands.MissingRequiredArgument):
+            logger.error(str(error))
+            #ctx.message = 'help' + ctx.command.name
+            return await ctx.send_help(ctx.command.name)
+
         else:
-            print(f'Ignoring exception in command {ctx.command}:')
+            logger.error(f"Ignoring exception in command {ctx.command}:")
             traceback.print_exception(type(error), error, error.__traceback__)
-            await ctx.send(f"```{error}```")
+            await ctx.send(f"```\n{type(error).__name__}: {str(error)}```")
 
 
 def setup(client):

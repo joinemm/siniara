@@ -1,113 +1,159 @@
-# Project: Joinemm-Bot
+# Project: Fansite Bot
 # File: utils.py
 # Author: Joinemm
-# Date created: 03/02/19
+# Date created: 06/04/19
 # Python Version: 3.6
 
-import tweepy
-import main
-import stream
+import database as db
 import asyncio
-
-database = main.database
-
-
-def get_follow_ids():
-    """Get the ids to follow in a list"""
-    return list(database.get_attr("follows", ".").keys())
+from discord.ext import commands
+import discord
+import copy
 
 
-def add_fansite(username, channel_id):
-    """Adds a channel to user's channel list, creating a new user if necessary"""
-    try:
-        user = stream.api.get_user(screen_name=username)
-    except tweepy.error.TweepError as e:
-        return e.args[0][0]['code']
-
-    database.set_attr("follows", f"{user.id}.username", user.screen_name)
-    return database.append_attr("follows", f"{user.id}.channels", channel_id, duplicate=False)
-
-
-def remove_fansite(username, channel_id):
-    """Removes a channel from user's channel list. if no more channels, delete the user"""
-    try:
-        user = stream.api.get_user(screen_name=username)
-        user_id = user.id
-    except tweepy.error.TweepError as e:
-        user_id = find_user(username)
-        if user_id is None:
-            return e.args[0][0]['code']
-
-    response = database.delete_attr("follows", f"{user_id}.channels", channel_id)
-    if response is False:
-        return "User not found in given channel's follow list"
-    if len(database.get_attr("follows", f"{user_id}.channels")) == 0:
-        database.delete_key("follows", f"{user_id}")
-    return True
-
-
-def find_user(username):
-    """find user by id or misc name"""
-    for user in database.get_attr("follows", "."):
-        if database.get_attr("follows", f"{user}.username") == username:
-            return user
-        elif user == username:
-            return user
-        else:
-            return None
-
-
-def filter_tweet(tweet):
+def filter_tweet(status):
     """filter out trash. eg. retweets"""
-    if str(tweet.user.id) not in database.get_attr("follows", "."):
+    if str(status.user.id) not in db.get_user_ids():
         return False
     try:
         # noinspection PyStatementEffect
-        tweet.retweeted_status
+        status.retweeted_status
         return False
     except AttributeError:
         return True
 
 
-def channel_from_mention(guild, text, default=None):
-    text = text.strip("<>#!@")
+async def get_channel(ctx, mention):
     try:
-        channel = guild.get_channel(int(text))
-        if channel is None:
-            return default
-        return channel
-    except ValueError:
-        return default
+        return await commands.TextChannelConverter().convert(ctx, mention)
+    except commands.errors.BadArgument:
+        return None
 
 
-async def page_switcher(client, my_msg, content, pages):
-    current_page = 0
+class TwoWayIterator:
+
+    def __init__(self, list_of_stuff):
+        self.items = list_of_stuff
+        self.index = 0
+
+    def next(self):
+        if not self.index == len(self.items) - 1:
+            self.index += 1
+        return self.items[self.index]
+
+    def previous(self):
+        if not self.index == 0:
+            self.index -= 1
+        return self.items[self.index]
+
+    def current(self):
+        return self.items[self.index]
+
+
+def create_pages(content, rows, maxrows=15):
+    """
+    :param content : Embed object to use as the base
+    :param rows    : List of rows to use for the embed description
+    :param maxrows : Maximum amount of rows per page
+    :returns       : List of Embed objects
+    """
+    pages = []
+    content.description = ""
+    thisrow = 0
+    for row in rows:
+        thisrow += 1
+        if len(content.description) + len(row) < 2000 and thisrow < maxrows+1:
+            content.description += f"\n{row}"
+        else:
+            thisrow = 0
+            pages.append(content)
+            content = copy.deepcopy(content)
+            content.description = f"{row}"
+    if not content.description == "":
+        pages.append(content)
+    return pages
+
+
+async def page_switcher(ctx, pages):
+    """
+    :param ctx    : Context
+    :param pages  : List of embeds to use as pages
+    """
+    pages = TwoWayIterator(pages)
+    pages.current().set_footer(text=f"page 1 of {len(pages.items)}")
+    msg = await ctx.send(embed=pages.current())
+
+    async def switch_page(content):
+        content.set_footer(text=f"page {pages.index + 1} of {len(pages.items)}")
+        await msg.edit(embed=content)
+
+    async def previous_page():
+        content = pages.previous()
+        await switch_page(content)
+
+    async def next_page():
+        content = pages.next()
+        await switch_page(content)
+
+    functions = {"⬅": previous_page,
+                 "➡": next_page}
+
+    await reaction_buttons(ctx, msg, functions)
+
+
+async def reaction_buttons(ctx, message, functions, timeout=600.0, only_author=False, single_use=False):
+    """Handler for reaction buttons
+    :param message     : message to add reactions to
+    :param functions   : dictionary of {emoji : function} pairs. functions must be async. return True to exit
+    :param timeout     : float, default 10 minutes (600.0)
+    :param only_author : only allow the user who used the command use the buttons
+    :param single_use  : delete buttons after one is used
+    """
+
+    for emoji in functions:
+        await message.add_reaction(emoji)
 
     def check(_reaction, _user):
-        return _reaction.message.id == my_msg.id and _reaction.emoji in ["⬅", "➡"] \
-               and not _user == client.user
-
-    await my_msg.add_reaction("⬅")
-    await my_msg.add_reaction("➡")
+        return _reaction.message.id == message.id \
+               and _reaction.emoji in functions \
+               and not _user == ctx.bot.user \
+               and (_user == ctx.author or not only_author)
 
     while True:
         try:
-            reaction, user = await client.wait_for('reaction_add', timeout=3600.0, check=check)
+            reaction, user = await ctx.bot.wait_for('reaction_add', timeout=timeout, check=check)
         except asyncio.TimeoutError:
-            return
+            break
         else:
-            try:
-                if reaction.emoji == "⬅" and current_page > 0:
-                    content.description = pages[current_page - 1]
-                    current_page -= 1
-                    await my_msg.remove_reaction("⬅", user)
-                elif reaction.emoji == "➡":
-                    content.description = pages[current_page + 1]
-                    current_page += 1
-                    await my_msg.remove_reaction("➡", user)
-                else:
-                    continue
-                content.set_footer(text=f"page {current_page + 1} of {len(pages)}")
-                await my_msg.edit(embed=content)
-            except IndexError:
-                continue
+            exits = await functions[str(reaction.emoji)]()
+            await message.remove_reaction(reaction.emoji, user)
+            if single_use or exits is True:
+                break
+
+    try:
+        for emoji in functions:
+            await message.remove_reaction(emoji, ctx.bot.user)
+    except discord.errors.NotFound:
+        pass
+
+
+def stringfromtime(t):
+    """
+    :param t : Time in seconds
+    :returns : Formatted string
+    """
+    m, s = divmod(t, 60)
+    h, m = divmod(m, 60)
+    d, h = divmod(h, 24)
+
+    components = []
+    if d > 0:
+        components.append(f"{int(d)} day" + ("s" if d > 1 else ""))
+    if h > 0:
+        components.append(f"{int(h)} hour" + ("s" if h > 1 else ""))
+    if m > 0:
+        components.append(f"{int(m)} minute" + ("s" if m > 1 else ""))
+    if s > 0:
+        components.append(f"{int(s)} second" + ("s" if s > 1 else ""))
+
+    return " ".join(components)

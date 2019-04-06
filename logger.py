@@ -1,36 +1,52 @@
-# Project: Joinemm-Bot
+# Project: Fansite Bot
 # File: logger.py
 # Author: Joinemm
-# Date created: 16/12/18
+# Date created: 06/04/19
 # Python Version: 3.6
 
 import logging
+import sys
 
 
-def create_logger(name):
-    """Creates and returns a custom logger with the given name. Use from cogs with __name__"""
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.INFO)
+FORMATTER = logging.Formatter("[ %(asctime)s | %(levelname)s | %(name)s.%(funcName)s() ]:: %(message)s",
+                              datefmt='%d/%m/%y %H:%M:%S')
+FORMATTER_COMMANDS = logging.Formatter("[ %(asctime)s | COMMAND | %(message)s",
+                                       datefmt='%d/%m/%y %H:%M:%S')
 
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.INFO)
 
-    formatter = logging.Formatter('%(asctime)s %(levelname)-7s %(message)s', datefmt='[%H:%M:%S]')
-    handler.setFormatter(formatter)
+def get_logger(logger_name):
+    logger = logging.getLogger(logger_name)
+    if logger.handlers:
+        return logger
 
-    logger.addHandler(handler)
+    # logger not created yet, assign options
+    logger.setLevel(logging.DEBUG)
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(FORMATTER)
+    logger.addHandler(console_handler)
 
     return logger
 
 
-def post_log(channel, user, tweet_type):
+def get_command_logger():
+    logger = logging.getLogger("commands")
+    if logger.handlers:
+        return logger
+
+    # logger not created yet, assign options
+    logger.setLevel(logging.DEBUG)
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(FORMATTER_COMMANDS)
+    logger.addHandler(console_handler)
+
+    return logger
+
+
+def log_command(ctx):
+    return f"{ctx.command}() | {ctx.guild} ]:: {ctx.author} \"{ctx.message.content}\""
+
+
+def tweet(channel, user, mediacount):
     """Formats a nice log message for tweet posts"""
-
-    return f'tweet by {user} :: type: {tweet_type} | >>> {channel.guild.name} :: {channel.name}'
-
-
-def command_log(ctx):
-    """Formats a nice log message from given context"""
-
-    return f'{ctx.message.author} in {ctx.message.guild.name}: "{ctx.message.content}"'
+    return f'{channel.guild.name}#{channel.name} <<< {mediacount} images by @{user}'
 

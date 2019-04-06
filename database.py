@@ -1,144 +1,95 @@
-# Project: Joinemm-Bot
+# Project: Fansite Bot
 # File: database.py
 # Author: Joinemm
-# Date created: 02/02/19
+# Date created: 06/04/19
 # Python Version: 3.6
 
-# modified version of Miso bot database
-
-import json
-from functools import reduce
+import sqlite3
+from collections import namedtuple
 
 
-class Datafile:
-
-    def __init__(self, path):
-        self.path = path
-        self.data = self.read()
-
-    def get_data(self):
-        return self.data
-
-    def set_data(self, keys, value, increment):
-        path_to = reduce(create_key, keys[:-1], self.get_data())
-        if isinstance(path_to, list):
-            key = int(keys[-1])
-        else:
-            key = keys[-1]
-        if increment and key in path_to:
-            path_to[key] += value
-        else:
-            path_to[key] = value
-        self.write()
-
-    def append_data(self, keys, value, duplicate):
-        path_to = reduce(create_key, keys[:-1], self.get_data())
-        if keys[-1] in path_to:
-            if duplicate is False and value in path_to[keys[-1]]:
-                return False
-            path_to[keys[-1]].append(value)
-        else:
-            path_to[keys[-1]] = [value]
-        self.write()
-        return True
-
-    def delete_data(self, keys, value):
-        path_to = reduce(create_key, keys, self.get_data())
-        if isinstance(path_to, list):
-            try:
-                path_to.remove(value)
-                self.write()
-                return True
-            except ValueError:
-                return False
-        elif isinstance(path_to, dict):
-            try:
-                del path_to[value]
-                self.write()
-                return True
-            except KeyError:
-                return False
-
-    def del_data(self, keys):
-        path_to = reduce(create_key, keys[:-1], self.get_data())
-        try:
-            del path_to[keys[-1]]
-            self.write()
-            return True
-        except KeyError:
-            return False
-
-    def sort(self):
-        self.data = order_dict(self.data)
-
-    def read(self):
-        with open(self.path, 'r') as filehandle:
-            return json.load(filehandle)
-
-    def write(self):
-        with open(self.path, 'w') as filehandle:
-            json.dump(self.data, filehandle, indent=4)
+SQLDATABASE = 'data/database.db'
 
 
-class Database:
+def query(command, parameters=(), maketuple=False, default=None):
+    connection = sqlite3.connect(SQLDATABASE)
+    cursor = connection.cursor()
+    cursor.execute(command, parameters)
+    data = cursor.fetchall()
+    if len(data) == 0:
+        return default
 
-    def __init__(self):
-        self.datafiles = {"follows": Datafile('data/follows.json'),
-                          "config": Datafile('data/config.json')}
-
-    def get_attr(self, database, attr, default=None):
-        datafile = self.datafiles[database]
-        if attr == ".":
-            return datafile.get_data()
-        else:
-            return deep_get(datafile.get_data(), attr, default)
-
-    def set_attr(self, database, attr, value, increment=False):
-        datafile = self.datafiles[database]
-        keys = attr.split(".")
-        datafile.set_data(keys, value, increment)
-        return True
-
-    def append_attr(self, database, attr, value, duplicate=True):
-        datafile = self.datafiles[database]
-        keys = attr.split(".")
-        return datafile.append_data(keys, value, duplicate)
-
-    def delete_attr(self, database, attr, value):
-        datafile = self.datafiles[database]
-        keys = attr.split(".")
-        return datafile.delete_data(keys, value)
-
-    def delete_key(self, database, attr):
-        datafile = self.datafiles[database]
-        keys = attr.split(".")
-        return datafile.del_data(keys)
-
-
-def create_key(d, key):
-    if key not in d:
-        d[key] = {}
-    return d.get(key)
-
-
-def deep_get(dictionary, keys, default=None):
-    def getter(d, key):
-        try:
-            return d.get(key, default)
-        except AttributeError:
-            try:
-                return d[int(key)]
-            except (ValueError, IndexError):
-                return default
-
-    return reduce(getter, keys.split("."), dictionary)
-
-
-def order_dict(data):
-    result = {}
-    for k, v in sorted(data.items()):
-        if isinstance(v, dict):
-            result[k] = order_dict(v)
-        else:
-            result[k] = v
+    if maketuple:
+        names = [description[0] for description in cursor.description]
+        NT = namedtuple('Data', names)
+        result = NT._make(data[0])
+    else:
+        result = data
+    connection.close()
     return result
+
+
+def execute(command, parameters=()):
+    connection = sqlite3.connect(SQLDATABASE)
+    cursor = connection.cursor()
+    cursor.execute(command, parameters)
+    connection.commit()
+    connection.close()
+
+
+def get_channel_settings(channel_id):
+    data = query("SELECT text_posts, image_text, image_links FROM settings WHERE channel_id = ?", (channel_id,),
+                 maketuple=True)
+    if data is None:
+        return namedtuple('Data', ['text_posts', 'image_text', 'image_links'])._make([1, 1, 0])
+    return data
+
+
+def get_channels(user_id):
+    data = query("SELECT channel_id FROM follows WHERE user_id = ?", (user_id,), default=[])
+    return [x[0] for x in data]
+
+
+def get_user_ids():
+    data = query("SELECT DISTINCT user_id FROM follows", default=[])
+    return [str(x[0]) for x in data]
+
+
+def add_follow(channel_id, user_id, username):
+    execute("REPLACE INTO follows (channel_id, user_id, username) values (?, ?, ?)",
+            (channel_id, user_id, username))
+
+
+def remove_follow(channel_id, user_id):
+    execute("DELETE FROM follows WHERE channel_id = ? and user_id = ?", (channel_id, user_id))
+
+
+def follow_exists(channel_id, user_id):
+    data = query("SELECT * FROM follows WHERE channel_id = ? and user_id = ?", (channel_id, user_id))
+    if data is None:
+        return False
+    else:
+        return True
+
+
+def add_tweet(channel_id, user_id, images):
+    execute("UPDATE follows SET tweets = tweets + 1, images = images + ? WHERE channel_id = ? and user_id = ?",
+            (images, channel_id, user_id))
+
+
+def change_setting(channel_id, setting, new_value):
+    execute("insert or ignore into settings(channel_id) values(?)", (channel_id,))
+    execute("update settings set %s = ?" % setting, (new_value,))
+
+
+def get_user_data(user_id):
+    data = query("SELECT username, tweets, images FROM follows WHERE user_id = ?", (user_id,))
+    if data is None:
+        return None
+    username = data[0][0]
+    tweets = 0
+    images = 0
+    for entry in data:
+        tweets += entry[1]
+        images += entry[2]
+    return username, tweets, images

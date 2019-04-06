@@ -1,25 +1,27 @@
-# Project: Joinemm-Bot
+# Project: Fansite Bot
 # File: stream.py
 # Author: Joinemm
-# Date created: 03/02/19
+# Date created: 06/04/19
 # Python Version: 3.6
 
 import discord
 from discord.ext import commands
-import logger
+import logger as log
 import tweepy
 from tweepy import OAuthHandler
 from tweepy import Stream
 from tweepy.streaming import StreamListener
 import asyncio
 import os
-import main
+import database as db
 import utils
 import time
 import re
+import psutil
+import math
 
-database = main.database
-log = logger.create_logger(__name__)
+logger = log.get_logger(__name__)
+
 
 # twitter credentials
 consumer_key = os.environ.get("TWITTER_CONSUMER_KEY")
@@ -41,38 +43,42 @@ class Listener(StreamListener):
         super().__init__()
 
     def on_connect(self):
-        log.info("Streamer connected")
+        logger.info("Streamer connected")
 
-    def on_status(self, data):
-        self.discord_client.loop.create_task(self.streamcog.post_tweet(data))
+    def on_status(self, status):
+        self.discord_client.loop.create_task(self.streamcog.statushandler(status))
         return True
 
     def on_error(self, status):
-        log.error(status)
+        logger.error(status)
         self.discord_client.loop.create_task(self.streamcog.report_error(status))
         return True
 
     def on_exception(self, exception):
-        log.error(f"Streamer Error: {exception}")
+        logger.error(f"Streamer Error: {exception}")
         self.discord_client.loop.create_task(self.streamcog.report_error(exception))
         return True
 
     def on_timeout(self):
-        log.error("Stream timed out!")
+        logger.error("Stream timed out!")
         self.discord_client.loop.create_task(self.streamcog.report_error("Stream timeout"))
         return True
 
 
-class StreamCog:
+class Streamer(commands.Cog):
 
     def __init__(self, client):
         self.client = client
         self.start_time = time.time()
+        self.twitterStream = None
         self.run_stream()
 
     def refresh(self):
-        self.twitterStream.disconnect()
-        del self.twitterStream
+        try:
+            self.twitterStream.disconnect()
+            del self.twitterStream
+        except AttributeError:
+            pass
         asyncio.sleep(5)
         self.run_stream()
 
@@ -84,11 +90,10 @@ class StreamCog:
 
     def run_stream(self):
         self.twitterStream = Stream(auth, Listener(self.client, self), tweet_mode='extended')
-        self.twitterStream.filter(follow=utils.get_follow_ids(), is_async=True)
+        self.twitterStream.filter(follow=db.get_user_ids(), is_async=True)
 
     async def update_activity(self):
-        await self.client.change_presence(activity=discord.Activity(name=f'{len(utils.get_follow_ids())} Fansites',
-                                                                    type=3))
+        await self.client.change_presence(activity=discord.Activity(name=f'{len(db.get_user_ids())} Fansites', type=3))
 
     async def on_ready(self):
         await self.update_activity()
@@ -96,173 +101,246 @@ class StreamCog:
     async def report_error(self, data):
         channel = self.client.get_channel(508668551658471424)
         if channel is None:
-            log.error("it brake")
+            logger.error("it brake")
         await channel.send(str(data))
 
-    async def post_tweet(self, tweet):
-        """posts the tweet into all the channels"""
-        if utils.filter_tweet(tweet) is False:
-            return
+    async def send_tweet(self, tweet):
+        post_text = tweet.full_text
+        # remove shortened links and add expanded ones
+        post_text = re.sub(r'\S*t\.co/\S*', '', post_text).strip()
+        for link in tweet.entities.get('urls'):
+            post_text += '\n\n' + link['expanded_url']
 
-        text = []
+        # get media
+        mediafiles = []
         try:
-            post_text = tweet.extended_tweet['full_text']
+            for media in tweet.extended_entities.get('media'):
+                media_type = media['type']
+                if media_type in ['animated_gif', 'video']:
+                    media_url = media['video_info']['variants'][-1]['url']
+                else:
+                    media_url = media['media_url_https']
+                mediafiles.append((media_type, media_url))
         except AttributeError:
-            post_text = tweet.text
-        for word in post_text.split(" "):
-            if "t.co/" not in word:
-                text.append(word)
+            pass
 
-        tweet_text = " ".join(text)
+        # send to channels
+        for channel_id in db.get_channels(tweet.user.id):
+            channel = self.client.get_channel(id=channel_id)
+            if channel is None:
+                logger.error(f"Unable to get channel {channel_id} for user {tweet.user.screen_name}")
 
-        channels = database.get_attr("follows", f"{tweet.user.id}.channels", [])
+            # get settings
+            channel_settings = db.get_channel_settings(channel_id)
 
-        media_files = []
-        try:
-            media = tweet.extended_entities.get('media', [])
-        except AttributeError:
-            media = None
-
-        # no media
-        if media is None:
             content = discord.Embed(colour=int(tweet.user.profile_link_color, 16))
-            for channel_id in channels:
-                if database.get_attr("config", f"channels.{channel_id}.text_posts", False):
-                    # channel = client.get_channel(channel_id)
-                    content.description = tweet_text
-                    content.set_author(icon_url=tweet.user.profile_image_url,
-                                       name=f"@{tweet.user.screen_name}",
-                                       url=f"https://twitter.com/{tweet.user.screen_name}/status/{tweet.id}")
-
-                    channel = self.client.get_channel(id=channel_id)
-                    if channel is None:
-                        log.error("it brake")
-                    await channel.send(embed=content)
-                    log.info(logger.post_log(channel, tweet.user.screen_name, "text"))
-            # add one to amount of text posts
-            database.set_attr("follows", f"{tweet.user.id}.text_posts", 1, increment=True)
-            return
-
-        # there is media
-        hashtags = []
-        for hashtag in tweet.entities.get('hashtags', []):
-            hashtags.append(f"#{hashtag['text']}")
-
-        for i in range(len(media)):
-            media_url = media[i]['media_url_https']
-            video_url = None
-            if not media[i]['type'] == "photo":
-                video_urls = media[i]['video_info']['variants']
-                largest_rate = 0
-                for x in range(len(video_urls)):
-                    if video_urls[x]['content_type'] == "video/mp4":
-                        if video_urls[x]['bitrate'] > largest_rate:
-                            largest_rate = video_urls[x]['bitrate']
-                            video_url = video_urls[x]['url']
-                            media_url = video_urls[x]['url']
-            media_files.append((" ".join(hashtags), media_url, video_url))
-
-        posted_text = False
-        for file in media_files:
-            content = discord.Embed(colour=int(tweet.user.profile_link_color, 16))
-            content.set_image(url=file[1] + ":orig")
-            content.set_author(icon_url=tweet.user.profile_image_url, name=f"@{tweet.user.screen_name}\n{file[0]}",
+            content.set_author(icon_url=tweet.user.profile_image_url_https,
+                               name=f"@{tweet.user.screen_name}",
                                url=f"https://twitter.com/{tweet.user.screen_name}/status/{tweet.id}")
 
-            for channel_id in channels:
-                content.description = None
-                if posted_text is False and database.get_attr("config", f"channels.{channel_id}.include_text", True):
-                    if database.get_attr("config", f"channels.{channel_id}.format", False):
-                        nums = re.findall(r'(\d{6})', tweet_text)
-                        if nums:
-                            number = " | ".join(nums)
-                            content.description = f"`@{tweet.user.screen_name} | {number}`"
+            if mediafiles:
+
+                if channel_settings.image_links == 1:
+                    # post fansite formatting, eg. @joinemm | 190406
+                    nums = re.findall(r'(\d{6})', post_text)
+                    number = " | ".join(nums)
+                    images = '\n'.join([x[1] + (":orig" if x[0] == 'photo' else "") for x in mediafiles])
+                    await channel.send(f"`@{tweet.user.screen_name} | {number}`\n{images}")
+
+                else:
+                    if channel_settings.image_text == 1:
+                        content.description = post_text
+
+                    for i, file in enumerate(mediafiles):
+                        if file[0] == 'photo':
+                            content.set_image(url=file[1] + ":orig")
+                            await channel.send(embed=content)
                         else:
-                            content.description = tweet_text
-                    else:
-                        content.description = tweet_text
+                            content._image = None
+                            await channel.send(embed=content)
+                            await channel.send(file[1])
 
-                channel = self.client.get_channel(id=channel_id)
-                if channel is None:
-                    log.error("it brake")
+                        if i == 0:
+                            content.description = None
+                            content._author = None
+
+            elif channel_settings.text_posts == 1:
+                content.description = post_text
                 await channel.send(embed=content)
-                log.info(logger.post_log(channel, tweet.user.screen_name, "media"))
 
-                if file[2] is not None:
-                    content.set_footer(text=f"Contains video/gif")
-                    await channel.send(file[2])
+            else:
+                continue
+            # add stats
+            db.add_tweet(channel_id, tweet.user.id, len(mediafiles))
+            logger.info(logger.post_log(channel, tweet.user.screen_name, len(mediafiles)))
 
-            posted_text = True
-            # add one to amount of images posted
-            database.set_attr("follows", f"{tweet.user.id}.images", 1, increment=True)
+    async def statushandler(self, status):
+        """filter status and get tweet object"""
+        if utils.filter_tweet(status) is False:
+            return
+
+        tweet = api.get_status(str(status.id), tweet_mode='extended', include_entities=True)
+        await self.send_tweet(tweet)
+
+    async def add(self, ctx, channel, usernames):
+        this_channel = await utils.get_channel(ctx, channel)
+        if this_channel is None:
+            return await ctx.send(f"Invalid channel `{channel}`")
+
+        changes = False
+        for username in usernames:
+            response = add_fansite(this_channel.id, username)
+
+            if response:
+                await ctx.send(f"Error `{response.get('code')}` adding `{username}` : `{response.get('message')}`")
+            else:
+                changes = True
+                await ctx.send(f"Now following `{username}` in {this_channel.mention}")
+
+        if changes:
+            await ctx.send('Use `$reset` to apply changes.')
+
+    async def remove(self, ctx, channel, usernames):
+        this_channel = await utils.get_channel(ctx, channel)
+        if this_channel is None:
+            return await ctx.send(f"Invalid channel `{channel}`")
+
+        changes = False
+        for username in usernames:
+            response = remove_fansite(this_channel.id, username)
+            if response:
+                await ctx.send(f"Error `{response.get('code')}` removing `{username}` : `{response.get('message')}`")
+            else:
+                await ctx.send(f"Removed `{username}` from {this_channel.mention}")
+
+        if changes:
+            await ctx.send('Use `$reset` to apply changes.')
 
     # ~~ COMMANDS ~~
 
-    @commands.command()
+    @commands.command(name='add')
     @commands.has_permissions(administrator=True)
-    async def add(self, ctx, mention, *usernames):
+    async def addmanual(self, ctx, channel, *usernames):
         """Add an account to the follow list"""
-        log.info(logger.command_log(ctx))
-
-        channel = utils.channel_from_mention(ctx.guild, mention)
-        if channel is None:
-            await ctx.send("Invalid channel")
-            return
-        for username in usernames:
-            response = utils.add_fansite(username, channel.id)
-            if response is True:
-                await ctx.send(f"Added `{username}` to {channel.mention}. Use $reset to apply changes.")
-            elif response is False:
-                await ctx.send(f"`{username}` already exists in {channel.mention}, skipping.")
-            else:
-                await ctx.send(f"Error adding `{username}`: `{response}`")
+        await self.add(ctx, channel, usernames)
 
     @commands.command()
     @commands.has_permissions(administrator=True)
-    async def remove(self, ctx, mention, *usernames):
-        """Remove an account from the follow list"""
-        log.info(logger.command_log(ctx))
+    async def addlist(self, ctx, channel, url):
+        """Add all users from a twitter list"""
+        this_channel = await utils.get_channel(ctx, channel)
+        if this_channel is None:
+            return await ctx.send(f"Invalid channel `{channel}`")
 
-        channel = utils.channel_from_mention(ctx.guild, mention)
-        if channel is None:
-            await ctx.send("Invalid channel")
-            return
-        for username in usernames:
-            response = utils.remove_fansite(username, channel.id)
-            if response is True:
-                await ctx.send(f"Removed `{username}` from {channel.mention}. Use $reset to apply changes")
-            else:
-                await ctx.send(f"Error removing `{username}`: `{response}`")
+        usernames = list_users(url)
+
+        await self.add(ctx, channel, usernames)
+
+    @commands.command(name='remove')
+    @commands.has_permissions(administrator=True)
+    async def removemanual(self, ctx, channel, *usernames):
+        """Remove an account from the follow list"""
+        await self.remove(ctx, channel, usernames)
+
+    @commands.command()
+    @commands.has_permissions(administrator=True)
+    async def removelist(self, ctx, channel, url):
+        """Remove all users from a twitter list"""
+        this_channel = await utils.get_channel(ctx, channel)
+        if this_channel is None:
+            return await ctx.send(f"Invalid channel `{channel}`")
+
+        usernames = list_users(url)
+
+        await self.remove(ctx, channel, usernames)
+
+    @commands.command()
+    @commands.is_owner()
+    async def disconnect(self, ctx):
+        self.twitterStream.disconnect()
+        del self.twitterStream
+        await ctx.send("Twitter stream disconnected")
 
     @commands.command()
     @commands.cooldown(1, 120)
     @commands.has_permissions(administrator=True)
     async def reset(self, ctx):
         """Reset the stream; refresh follows and settings"""
-        log.info(logger.command_log(ctx))
-
         self.refresh()
         await self.update_activity()
         await ctx.send("TwitterStream reinitialized, follow list updated")
 
-    @commands.command()
+    @commands.command(alises=['uptime'])
     async def status(self, ctx):
         """Get the bot's status"""
-        log.info(logger.command_log(ctx))
-
         up_time = time.time() - self.start_time
-        m, s = divmod(up_time, 60)
-        h, m = divmod(m, 60)
-        d, h = divmod(h, 24)
+        uptime_string = utils.stringfromtime(up_time)
 
-        bot_msg = await ctx.send(f"```running = {self.get_status()}\n"
-                                 f"heartbeat = {self.client.latency * 1000:.0f}ms\n"
-                                 f"roundtrip latency = PENDINGms\n"
-                                 f"uptime = {d:.0f} days {h:.0f} hours {m:.0f} minutes {s:.0f} seconds```")
+        stime = time.time() - psutil.boot_time()
+        system_uptime_string = utils.stringfromtime(stime)
 
-        latency = (bot_msg.created_at - ctx.message.created_at).total_seconds() * 1000
-        await bot_msg.edit(content=bot_msg.content.replace("PENDING", str(latency)))
+        mem = psutil.virtual_memory()
+        pid = os.getpid()
+        memory_use = psutil.Process(pid).memory_info()[0]
+
+        content = discord.Embed(title=f"Fansite Bot | version 3.0")
+        content.set_thumbnail(url=self.client.user.avatar_url)
+
+        content.add_field(name="Bot process uptime", value=uptime_string)
+        content.add_field(name="System CPU Usage", value=f"{psutil.cpu_percent()}%")
+        content.add_field(name="System uptime", value=system_uptime_string)
+        content.add_field(name="System memory Usage", value=f"{mem.percent}%")
+        content.add_field(name="Bot memory usage", value=f"{memory_use / math.pow(1024, 2):.2f}MB")
+        content.add_field(name="Stream running", value=str(self.get_status()))
+
+        await ctx.send(embed=content)
 
 
 def setup(client):
-    client.add_cog(StreamCog(client))
+    client.add_cog(Streamer(client))
+
+
+def add_fansite(channel_id, username):
+    """Add new user entry to database
+    :returns error dict {code:, message:} or None
+    """
+    try:
+        user = api.get_user(screen_name=username)
+        user_id = user.id
+    except tweepy.error.TweepError as e:
+        return e.args[0][0]
+
+    if db.follow_exists(channel_id, user_id):
+        return {'code': 160, 'message': 'User already being followed on this channel.'}
+    else:
+        db.add_follow(channel_id, user_id, username)
+        return None
+
+
+def remove_fansite(channel_id, username):
+    """Remove user entry from the database
+    :returns error dict {code:, message:} or None
+    """
+    try:
+        user = api.get_user(screen_name=username)
+        user_id = user.id
+    except tweepy.error.TweepError as e:
+        data = db.query("SELECT user_id FROM follows WHERE username = ?", (username,))
+        if data is None:
+            return e.args[0][0]
+        else:
+            user_id = data[0][0]
+
+    if db.follow_exists(channel_id, user_id):
+        db.remove_follow(channel_id, user_id)
+        return None
+    else:
+        return {'code': 55, 'message': 'User not found on this channel.'}
+
+
+def list_users(url):
+    url = url.replace('https://', '').split('/')
+    user = url[1]
+    listname = url[3]
+    usernames = [u.screen_name for u in tweepy.Cursor(api.list_members, user, listname).items()]
+    return usernames

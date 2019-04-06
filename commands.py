@@ -1,19 +1,17 @@
-# Project: Joinemm-Bot
+# Project: Fansite Bot
 # File: commands.py
 # Author: Joinemm
-# Date created: 03/02/19
+# Date created: 06/04/19
 # Python Version: 3.6
 
 import discord
 from discord.ext import commands
-import logger
 import utils
-import main
+import database as db
+import json
 
-log = logger.create_logger(__name__)
 
-
-class Commands:
+class Commands(commands.Cog):
 
     def __init__(self, client):
         self.client = client
@@ -21,89 +19,102 @@ class Commands:
     @commands.command()
     async def info(self, ctx):
         """Get information about the bot."""
-        log.info(logger.command_log(ctx))
-
         appinfo = await self.client.application_info()
-        info_embed = discord.Embed(title='Fansite Tracker Bot',
-                                   description=f'This is a bot for tracking fansites on twitter.\n'
-                                   f'use the help command for a list of commands.\n\n'
-                                   f'Currently tracking {len(utils.get_follow_ids())} accounts '
+        info_embed = discord.Embed(title="Fansite Bot | version 3.0",
+                                   description=f"Created by {appinfo.owner.mention}\n\n"
+                                   f'This is a bot mainly made for tracking kpop fansites on twitter.'
+                                   f'Also works fine as a general twitter streamer.\n'
+                                   f'use `{self.client.command_prefix}help` for the list of commands.\n\n'
+                                   f'Currently tracking {len(db.get_user_ids())} accounts '
                                    f'across {len(self.client.guilds)} servers.\n\n'
                                    f'Author: {appinfo.owner.mention}',
-                                   colour=ctx.guild.get_member(self.client.user.id).color)
+                                   colour=discord.Color.blue())
+        info_embed.add_field(name='Github', value='https://github.com/joinemm/fansite-bot', inline=False)
         info_embed.add_field(name='Patreon', value="https://www.patreon.com/joinemm", inline=False)
-        info_embed.set_footer(text='version 3.0')
         info_embed.set_thumbnail(url=self.client.user.avatar_url)
         await ctx.send(embed=info_embed)
 
     @commands.command()
+    async def ping(self, ctx):
+        """Get the bot's ping"""
+        pong_msg = await ctx.send(":ping_pong:")
+        sr_lat = (pong_msg.created_at - ctx.message.created_at).total_seconds() * 1000
+        await pong_msg.edit(content=f"Command latency = `{sr_lat}ms`\n"
+                                    f"API heartbeat = `{self.client.latency * 1000:.1f}ms`")
+
+    @commands.group()
     @commands.has_permissions(administrator=True)
-    async def config(self, ctx, param1=None, param2=None, param3=None):
+    async def config(self, ctx, channel):
         """Configure bot options."""
-        log.info(logger.command_log(ctx))
+        if ctx.invoked_subcommand is None or isinstance(ctx.invoked_subcommand, commands.Group):
+            this_channel = await utils.get_channel(ctx, channel)
+            if this_channel is None:
+                return await ctx.send(f"Invalid channel `{channel}`")
 
-        if param1 == "help" or param1 is None:
-            await ctx.send("`$config [channel] [setting] [True | False]`\n"
-                           "**settings:** `[textposts | imagetext | fansiteformatting]`\n")
-            return
-        else:
-            channel = utils.channel_from_mention(ctx.guild, param1)
-            if channel is None:
-                await ctx.send("Invalid channel")
+            settings = db.get_channel_settings(this_channel.id)
+            await ctx.send(f"**Current settings for** {this_channel.mention}\n```"
+                           f"Text only posts : {settings.text_posts == 1}\n"
+                           f"Image text : {settings.image_text == 1}\n"
+                           f"Images as links : {settings.image_links == 1}```")
 
-        if param2 == "textposts":
-            if param3.lower() == "true":
-                main.database.set_attr("config", f"channels.{channel.id}.text_posts", True)
-            elif param3.lower() == "false":
-                main.database.set_attr("config", f"channels.{channel.id}.text_posts", False)
-            else:
-                await ctx.send(f"ERROR: Invalid parameter `{param3}`. Use `true` or `false`")
-                return
-            await ctx.send(f"Set textpost mode for {channel.mention} to `{param3.lower()}`")
+    @config.command()
+    async def textposts(self, ctx, channel, value):
+        """Allow text only posts?"""
+        this_channel = await utils.get_channel(ctx, channel)
+        if this_channel is None:
+            return await ctx.send(f"Invalid channel `{channel}`")
 
-        elif param2 == "imagetext":
-            if param3.lower() == "true":
-                main.database.set_attr("config", f"channels.{channel.id}.include_text", True)
-            elif param3.lower() == "false":
-                main.database.set_attr("config", f"channels.{channel.id}.include_text", False)
-            else:
-                await ctx.send(f"ERROR: Invalid parameter `{param3}`. Use `true` or `false`")
-                return
-            await ctx.send(f"Set imagetext mode for {channel.mention} to `{param3.lower()}`")
+        value = text_to_int_bool(value)
+        if value is None:
+            return await ctx.send(f"Invalid value `{value}`. Use `true` or `false`")
 
-        elif param2 == "fansiteformatting":
-            if param3.lower() == "true":
-                main.database.set_attr("config", f"channels.{channel.id}.format", True)
-            elif param3.lower() == "false":
-                main.database.set_attr("config", f"channels.{channel.id}.format", False)
-            else:
-                await ctx.send(f"ERROR: Invalid parameter `{param3}`. Use `true` or `false`")
-                return
-            await ctx.send(f"Set fansite formatting mode for {channel.mention} to `{param3.lower()}`")
+        db.change_setting(this_channel.id, 'text_posts', value)
+        await ctx.send(f"Textposts in {channel.mention} `{'enabled' if value == 1 else 'disabled'}`")
 
-        else:
-            settings = main.database.get_attr("config", f"channels.{channel.id}")
-            await ctx.send(f"Current settings for {channel.mention}\n```{settings}```")
+    @config.command()
+    async def imagetext(self, ctx, channel, value):
+        """Have tweet text with images?"""
+        this_channel = await utils.get_channel(ctx, channel)
+        if this_channel is None:
+            return await ctx.send(f"Invalid channel `{channel}`")
+
+        value = text_to_int_bool(value)
+        if value is None:
+            return await ctx.send(f"Invalid value `{value}`. Use `true` or `false`")
+
+        db.change_setting(this_channel.id, 'image_text', value)
+        await ctx.send(f"Image text in {channel.mention} `{'enabled' if value == 1 else 'disabled'}`")
+
+    @config.command()
+    async def imagelinks(self, ctx, channel, value):
+        """Post images as links instead of embeds?"""
+        this_channel = await utils.get_channel(ctx, channel)
+        if this_channel is None:
+            return await ctx.send(f"Invalid channel `{channel}`")
+
+        value = text_to_int_bool(value)
+        if value is None:
+            return await ctx.send(f"Invalid value `{value}`. Use `true` or `false`")
+
+        db.change_setting(this_channel.id, 'image_links', value)
+        await ctx.send(f"Images as links in {channel.mention} `{'enabled' if value == 1 else 'disabled'}`")
 
     @commands.command()
-    async def list(self, ctx, mention=None):
-        """List the currently followed accounts on this server."""
-        log.info(logger.command_log(ctx))
-
+    async def list(self, ctx, channel=None):
+        """List the currently followed accounts on this server or given channel"""
         channel_limit = None
-        if mention is not None:
-            channel_limit = utils.channel_from_mention(ctx.guild, mention)
+        if channel is not None:
+            channel_limit = await utils.get_channel(ctx, channel)
             if channel_limit is None:
-                await ctx.send(f"Invalid channel `{mention}`")
-                return
+                return await ctx.send(f"Invalid channel `{channel}`")
 
-        followlist = main.database.get_attr("follows", ".")
+        followers = db.get_user_ids()
 
-        pages = []
         rows = []
-        for userid in followlist:
+        for user_id in followers:
+            user_id = int(user_id)
             channel_mentions = []
-            for channel_id in followlist[userid]['channels']:
+            for channel_id in db.get_channels(user_id):
                 channel = ctx.guild.get_channel(channel_id)
                 if channel is not None:
                     if channel_limit is not None and not channel == channel_limit:
@@ -111,37 +122,50 @@ class Commands:
                     channel_mentions.append(channel.mention)
 
             if channel_mentions:
-                username = main.database.get_attr("follows", f"{userid}.username", "ERROR")
-                text_posts = main.database.get_attr("follows", f"{userid}.text_posts", 0)
-                images = main.database.get_attr("follows", f"{userid}.images", 0)
+                userdata = db.get_user_data(user_id)
                 if channel_limit is not None:
-                    rows.append(f"**{username}** ({text_posts}|{images})")
+                    rows.append(f"`{userdata[0]}` : **{userdata[1]}** tweets **{userdata[2]}** images")
                 else:
-                    rows.append(f"**{username}** ({text_posts}|{images}) >> {'|'.join(channel_mentions)}")
-            if len(rows) == 25:
-                pages.append("\n".join(rows))
-                rows = []
+                    rows.append(f"`{userdata[0]}` : **{userdata[1]}** tweets **{userdata[2]}** images **>>** "
+                                f"{'/'.join(channel_mentions)}")
 
-        if rows:
-            pages.append("\n".join(rows))
-
-        if not pages:
-            await ctx.send("I am not following any users on this server yet!")
-            return
+        if not rows:
+            return await ctx.send(f"I am not following any users on this "
+                                  f"{'server' if channel_limit is None else 'channel'} yet!")
 
         content = discord.Embed()
         if channel_limit is not None:
-            content.title = f"Followed users in **{channel_limit.name}** channel | (text|image) posts:"
+            content.title = f"Followed users in **#{channel_limit.name}**"
         else:
-            content.title = f"Followed users in **{ctx.guild.name}** | (text|image) posts:"
+            content.title = f"Followed users in **{ctx.guild.name}**"
 
-        content.set_footer(text=f"page 1 of {len(pages)}")
-        content.description = pages[0]
-        msg = await ctx.send(embed=content)
-
+        pages = utils.create_pages(content, rows, 25)
         if len(pages) > 1:
-            await utils.page_switcher(self.client, msg, content, pages)
+            await utils.page_switcher(ctx, pages)
+        else:
+            await ctx.send(embed=pages[0])
+
+    @commands.command()
+    @commands.is_owner()
+    async def convert(self, ctx):
+        with open("data/follows.json", "r") as f:
+            data = json.load(f)
+
+            for user_id in data:
+                for channel_id in data[user_id]['channels']:
+                    db.execute("REPLACE INTO follows (channel_id, user_id, username) values (?, ?, ?)",
+                               (channel_id, user_id, data[user_id]['username']))
+        await ctx.send("yes")
 
 
 def setup(client):
     client.add_cog(Commands(client))
+
+
+def text_to_int_bool(value):
+    if value.lower() in ["true", "yes", "enable", "1"]:
+        return 1
+    elif value.lower() in ["false", "no", "disable", "0"]:
+        return 0
+    else:
+        return None
