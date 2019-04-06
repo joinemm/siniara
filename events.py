@@ -56,7 +56,7 @@ class Events(commands.Cog):
         elif isinstance(error, commands.MissingRequiredArgument):
             logger.error(str(error))
             #ctx.message = 'help' + ctx.command.name
-            return await ctx.send_help(ctx.command.name)
+            return await ctx.send(str(error))
 
         else:
             logger.error(f"Ignoring exception in command {ctx.command}:")
