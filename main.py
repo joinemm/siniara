@@ -10,7 +10,7 @@ import os
 
 # discord variables
 TOKEN = os.environ.get('FANSITE_BOT_TOKEN')
-client = commands.Bot(command_prefix="$")
+client = commands.Bot(command_prefix="$", owner_id=133311691852218378)
 extensions = ['commands', 'events', 'stream']
 
 logger = log.get_logger(__name__)

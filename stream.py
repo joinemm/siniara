@@ -155,7 +155,8 @@ class Streamer(commands.Cog):
                 nums = re.findall(r'(\d{6})', post_text)
                 number = " | ".join(nums)
                 images = '\n'.join([x[1] + (":orig" if x[0] == 'photo' else "") for x in mediafiles])
-                await channel.send(f"`@{tweet.user.screen_name} | {number}`\n{images}")
+                await channel.send(f"```\n{number} | @{tweet.user.screen_name}```"
+                                   f"\n{images}")
 
             else:
                 if channel_settings.image_text == 1:
@@ -273,9 +274,10 @@ class Streamer(commands.Cog):
 
         await self.remove(ctx, channel, usernames)
 
-    @commands.command()
+    @commands.command(hidden=True)
     @commands.is_owner()
     async def disconnect(self, ctx):
+        """Disconnect the twitter stream"""
         self.twitterStream.disconnect()
         del self.twitterStream
         await ctx.send("Twitter stream disconnected")

@@ -46,6 +46,7 @@ class Commands(commands.Cog):
 
     @commands.command()
     async def changelog(self, ctx):
+        """Get the github commit history"""
         author = "joinemm"
         repo = "fansite-bot"
         data = get_commits(author, repo)
@@ -77,7 +78,7 @@ class Commands(commands.Cog):
     @commands.group()
     @commands.has_permissions(administrator=True)
     async def config(self, ctx, channel=None):
-        """Configure bot options."""
+        """Configure channel specific options"""
         if channel is None:
             return await ctx.send_help(ctx.command.name)
 
@@ -100,7 +101,7 @@ class Commands(commands.Cog):
 
     @config.command()
     async def textposts(self, ctx, value):
-        """Allow text only posts?"""
+        """Allow text only tweets?"""
         value = text_to_int_bool(value)
         if value is None:
             return await ctx.send(f"Invalid value `{value}`. Use `true` or `false`")
@@ -110,7 +111,7 @@ class Commands(commands.Cog):
 
     @config.command()
     async def imagetext(self, ctx, value):
-        """Have tweet text with images?"""
+        """Post tweet text with images?"""
         value = text_to_int_bool(value)
         if value is None:
             return await ctx.send(f"Invalid value `{value}`. Use `true` or `false`")
@@ -130,7 +131,7 @@ class Commands(commands.Cog):
 
     @commands.command()
     async def list(self, ctx, channel=None):
-        """List the currently followed accounts on this server or given channel"""
+        """List all followed accounts on server or channel"""
         channel_limit = None
         if channel is not None:
             channel_limit = await utils.get_channel(ctx, channel)
