@@ -117,10 +117,11 @@ class Commands(commands.Cog):
                     channel_mentions.append(channel.mention)
 
             if channel_mentions:
-                userdata = db.get_user_data(user_id)
                 if channel_limit is not None:
+                    userdata = db.get_user_data(user_id, limit=channel_limit.id)
                     rows.append(f"`{userdata[0]}` : **{userdata[1]}** tweets **{userdata[2]}** images")
                 else:
+                    userdata = db.get_user_data(user_id)
                     rows.append(f"`{userdata[0]}` : **{userdata[1]}** tweets **{userdata[2]}** images **>>** "
                                 f"{'/'.join(channel_mentions)}")
 

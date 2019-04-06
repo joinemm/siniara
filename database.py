@@ -82,14 +82,24 @@ def change_setting(channel_id, setting, new_value):
     execute("update settings set %s = ?" % setting, (new_value,))
 
 
-def get_user_data(user_id):
-    data = query("SELECT username, tweets, images FROM follows WHERE user_id = ?", (user_id,))
-    if data is None:
-        return None
-    username = data[0][0]
-    tweets = 0
-    images = 0
-    for entry in data:
-        tweets += entry[1]
-        images += entry[2]
+def get_user_data(user_id, limit=None):
+    if limit is None:
+        data = query("SELECT username, tweets, images FROM follows WHERE user_id = ?", (user_id,))
+        if data is None:
+            return None
+        username = data[0][0]
+        tweets = 0
+        images = 0
+        for entry in data:
+            tweets += entry[1]
+            images += entry[2]
+    else:
+        data = query("SELECT username, tweets, images FROM follows WHERE user_id = ? and channel_id = ?",
+                     (user_id, limit))
+        if data is None:
+            return None
+        username = data[0][0]
+        tweets = data[0][1]
+        images = data[0][2]
+
     return username, tweets, images
