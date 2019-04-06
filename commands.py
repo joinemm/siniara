@@ -8,6 +8,10 @@ import discord
 from discord.ext import commands
 import utils
 import database as db
+import arrow
+import requests
+import json
+import copy
 
 
 class Commands(commands.Cog):
@@ -39,6 +43,36 @@ class Commands(commands.Cog):
         sr_lat = (pong_msg.created_at - ctx.message.created_at).total_seconds() * 1000
         await pong_msg.edit(content=f"Command latency = `{sr_lat}ms`\n"
                                     f"API heartbeat = `{self.client.latency * 1000:.1f}ms`")
+
+    @commands.command()
+    async def changelog(self, ctx):
+        author = "joinemm"
+        repo = "fansite-bot"
+        data = get_commits(author, repo)
+        content = discord.Embed(color=discord.Color.from_rgb(255, 255, 255))
+        content.set_author(name="Github commit history", icon_url=data[0]['author']['avatar_url'],
+                           url=f"https://github.com/{author}/{repo}/commits/master")
+        content.set_thumbnail(url='http://www.logospng.com/images/182/github-icon-182553.png')
+
+        pages = []
+        i = 0
+        for commit in data:
+            if i == 10:
+                pages.append(content)
+                content = copy.deepcopy(content)
+                content.clear_fields()
+                i = 0
+            sha = commit['sha'][:7]
+            author = commit['author']['login']
+            date = commit['commit']['author']['date']
+            arrow_date = arrow.get(date)
+            url = commit['html_url']
+            content.add_field(name=f"[`{sha}`] **{commit['commit']['message']}**",
+                              value=f"**{author}** committed {arrow_date.humanize()} | [link]({url})",
+                              inline=False)
+            i += 1
+        pages.append(content)
+        await utils.page_switcher(ctx, pages)
 
     @commands.group()
     @commands.has_permissions(administrator=True)
@@ -141,6 +175,33 @@ class Commands(commands.Cog):
         else:
             await ctx.send(embed=pages[0])
 
+    @commands.command(hidden=True)
+    @commands.is_owner()
+    async def guilds(self, ctx):
+        """Show all connected guilds and the amount of follows"""
+        guilds = []
+        followers = db.get_user_ids()
+        for user_id in followers:
+            for channel_id in db.get_channels(int(user_id)):
+                channel = self.client.get_channel(int(channel_id))
+                if channel is None:
+                    continue
+                guilds.append(channel.guild.id)
+
+        content = "**Connected guilds:**\n"
+        for guild in self.client.guilds:
+            content += f"[`{guild.id}`] **{guild.name}** - {guild.member_count} members / {guilds.count(guild.id)} follows\n"
+        await ctx.send(content)
+
+    @commands.command(hidden=True)
+    @commands.is_owner()
+    async def leaveguild(self, ctx, guild_id):
+        """Leave a guild"""
+        guild = self.client.get_guild(int(guild_id))
+        await guild.leave()
+        await ctx.send(f"Left the guild `{guild.name}`:`{guild.id}`")
+        print(f"Left the guild `{guild.name}`:`{guild.id}`")
+
 
 def setup(client):
     client.add_cog(Commands(client))
@@ -153,3 +214,10 @@ def text_to_int_bool(value):
         return 0
     else:
         return None
+
+
+def get_commits(author, repository):
+    url = f"https://api.github.com/repos/{author}/{repository}/commits"
+    response = requests.get(url)
+    data = json.loads(response.content.decode('utf-8'))
+    return data
