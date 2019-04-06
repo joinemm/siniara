@@ -101,7 +101,7 @@ class Streamer(commands.Cog):
     async def report_error(self, data):
         channel = self.client.get_channel(508668551658471424)
         if channel is None:
-            logger.error("it brake")
+            logger.error(str(data))
         await channel.send(str(data))
 
     async def send_tweet(self, tweet):
@@ -117,7 +117,14 @@ class Streamer(commands.Cog):
             for media in tweet.extended_entities.get('media'):
                 media_type = media['type']
                 if media_type in ['animated_gif', 'video']:
-                    media_url = media['video_info']['variants'][-1]['url']
+                    i = 1
+                    content_type = None
+                    variant = None
+                    while not content_type == 'video/mp4' and not i > len(media['video_info']['variants']):
+                        variant = media['video_info']['variants'][-i]
+                        content_type = variant['content_type']
+                        i += 1
+                    media_url = variant['url']
                 else:
                     media_url = media['media_url_https']
                 mediafiles.append((media_type, media_url))
@@ -172,7 +179,7 @@ class Streamer(commands.Cog):
                 continue
             # add stats
             db.add_tweet(channel_id, tweet.user.id, len(mediafiles))
-            logger.info(logger.post_log(channel, tweet.user.screen_name, len(mediafiles)))
+            logger.info(log.tweet(channel, tweet.user.screen_name, len(mediafiles)))
 
     async def statushandler(self, status):
         """filter status and get tweet object"""
