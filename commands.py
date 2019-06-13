@@ -133,16 +133,19 @@ class Commands(commands.Cog):
     async def list(self, ctx, channel=None):
         """List all followed accounts on server or channel"""
         channel_limit = None
+        show_inactive = False
         if channel is not None:
-            channel_limit = await utils.get_channel(ctx, channel)
-            if channel_limit is None:
-                return await ctx.send(f"Invalid channel `{channel}`")
+            if channel == "inactive":
+                show_inactive = True
+            else:
+                channel_limit = await utils.get_channel(ctx, channel)
+                if channel_limit is None:
+                    return await ctx.send(f"Invalid channel `{channel}`")
 
         followers = db.get_user_ids()
 
         rows = []
         for user_id in followers:
-            user_id = int(user_id)
             channel_mentions = []
             for channel_id in db.get_channels(user_id):
                 channel = ctx.guild.get_channel(channel_id)
@@ -154,11 +157,13 @@ class Commands(commands.Cog):
             if channel_mentions:
                 if channel_limit is not None:
                     userdata = db.get_user_data(user_id, limit=channel_limit.id)
-                    rows.append(f"`{userdata[0]}` : **{userdata[1]}** tweets **{userdata[2]}** images")
+                    if not show_inactive or (show_inactive and userdata[1] == 0):
+                        rows.append(f"`{userdata[0]}` : **{userdata[1]}** tweets **{userdata[2]}** images")
                 else:
                     userdata = db.get_user_data(user_id)
-                    rows.append(f"`{userdata[0]}` : **{userdata[1]}** tweets **{userdata[2]}** images **>>** "
-                                f"{'/'.join(channel_mentions)}")
+                    if not show_inactive or (show_inactive and userdata[1] == 0):
+                        rows.append(f"`{userdata[0]}` : **{userdata[1]}** tweets **{userdata[2]}** images **>>** "
+                                    f"{'/'.join(channel_mentions)}")
 
         if not rows:
             return await ctx.send(f"I am not following any users on this "
