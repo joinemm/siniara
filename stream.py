@@ -103,6 +103,8 @@ class Streamer(commands.Cog):
         if channel is None:
             logger.error(str(data))
         await channel.send(str(data))
+        self.refresh()
+        await channel.send("Automatically refreshed stream...")
 
     async def send_tweet(self, tweet):
         # send to channels
@@ -232,6 +234,7 @@ class Streamer(commands.Cog):
 
     @commands.command()
     async def get(self, ctx, tweet_id):
+        """Get one tweet by id"""
         if "status" in tweet_id:
             tweet_id = re.search(r'status/(\d+)', tweet_id).group(1)
 
@@ -242,6 +245,8 @@ class Streamer(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def addmanual(self, ctx, channel, *usernames):
         """Add an account to the follow list"""
+        if not usernames:
+            return await ctx.send("You must give at least one username to add.")
         await self.add(ctx, channel, usernames)
 
     @commands.command()
@@ -253,6 +258,8 @@ class Streamer(commands.Cog):
             return await ctx.send(f"Invalid channel `{channel}`")
 
         usernames = list_users(url)
+        if not usernames:
+            return await ctx.send("This list is empty!")
 
         await self.add(ctx, channel, usernames)
 
@@ -260,6 +267,8 @@ class Streamer(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def removemanual(self, ctx, channel, *usernames):
         """Remove an account from the follow list"""
+        if not usernames:
+            return await ctx.send("You must give at least one username to remove.")
         await self.remove(ctx, channel, usernames)
 
     @commands.command()
@@ -271,6 +280,8 @@ class Streamer(commands.Cog):
             return await ctx.send(f"Invalid channel `{channel}`")
 
         usernames = list_users(url)
+        if not usernames:
+            return await ctx.send("This list is empty!")
 
         await self.remove(ctx, channel, usernames)
 
@@ -360,8 +371,11 @@ def remove_fansite(channel_id, username):
 
 
 def list_users(url):
-    url = url.replace('https://', '').split('/')
-    user = url[1]
-    listname = url[3]
+    url = url.replace('https://', '').replace('http://', '').split('/')
+    try:
+        user = url[1]
+        listname = url[3]
+    except IndexError:
+        raise Exception("Malformed list url!\ncorrect  : https://twitter.com/username/lists/list-name-here")
     usernames = [u.screen_name for u in tweepy.Cursor(api.list_members, user, listname).items()]
     return usernames
