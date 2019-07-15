@@ -166,7 +166,7 @@ class Streamer(commands.Cog):
 
                 for i, file in enumerate(mediafiles):
                     if file[0] == 'photo':
-                        content.set_image(url=file[1] + ":orig")
+                        content.set_image(url=file[1].replace('.jpg', '?format=jpg&name=orig'))
                         await channel.send(embed=content)
                     else:
                         content._image = None
@@ -282,6 +282,21 @@ class Streamer(commands.Cog):
         usernames = list_users(url)
         if not usernames:
             return await ctx.send("This list is empty!")
+
+        await self.remove(ctx, channel, usernames)
+
+    @commands.command()
+    @commands.has_permissions(administrator=True)
+    async def clearchannel(self, ctx, channel):
+        """Clear all followings from a channel"""
+        this_channel = await utils.get_channel(ctx, channel)
+        if this_channel is None:
+            return await ctx.send(f"Invalid channel `{channel}`")
+
+        usernames = db.query("SELECT username FROM follows WHERE channel_id = ?", (this_channel.id,))
+        if usernames is None:
+            return await ctx.send("I am not following any users on this channel!")
+        usernames = [t[0] for t in usernames]
 
         await self.remove(ctx, channel, usernames)
 

@@ -53,11 +53,6 @@ class Events(commands.Cog):
             perms = ', '.join([f"**{x}**" for x in error.missing_perms])
             return await ctx.send(f"I am missing the required permissions to execute this command: {perms}")
 
-        elif isinstance(error, commands.MissingRequiredArgument):
-            logger.error(str(error))
-            #ctx.message = 'help' + ctx.command.name
-            return await ctx.send(str(error))
-
         else:
             logger.error(f"Ignoring exception in command {ctx.command}:")
             traceback.print_exception(type(error), error, error.__traceback__)
