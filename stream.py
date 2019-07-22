@@ -214,20 +214,16 @@ class Streamer(commands.Cog):
         if changes:
             await ctx.send('Use `$reset` to apply changes.')
 
-    async def remove(self, ctx, channel, usernames):
-        this_channel = await utils.get_channel(ctx, channel)
-        if this_channel is None:
-            return await ctx.send(f"Invalid channel `{channel}`")
-
+    async def remove(self, ctx, channel_id, usernames, prompt_reset=True):
         changes = False
         for username in usernames:
-            response = remove_fansite(this_channel.id, username)
+            response = remove_fansite(channel_id, username)
             if response:
                 await ctx.send(f"Error `{response.get('code')}` removing `{username}` : `{response.get('message')}`")
             else:
-                await ctx.send(f"Removed `{username}` from {this_channel.mention}")
+                await ctx.send(f"Removed `{username}` from <#{channel_id}>")
 
-        if changes:
+        if changes and prompt_reset:
             await ctx.send('Use `$reset` to apply changes.')
 
     # ~~ COMMANDS ~~
@@ -267,9 +263,13 @@ class Streamer(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def removemanual(self, ctx, channel, *usernames):
         """Remove an account from the follow list"""
+        this_channel = await utils.get_channel(ctx, channel)
+        if this_channel is None:
+            return await ctx.send(f"Invalid channel `{channel}`")
+
         if not usernames:
             return await ctx.send("You must give at least one username to remove.")
-        await self.remove(ctx, channel, usernames)
+        await self.remove(ctx, this_channel.id, usernames)
 
     @commands.command()
     @commands.has_permissions(administrator=True)
@@ -283,7 +283,7 @@ class Streamer(commands.Cog):
         if not usernames:
             return await ctx.send("This list is empty!")
 
-        await self.remove(ctx, channel, usernames)
+        await self.remove(ctx, this_channel.id, usernames)
 
     @commands.command()
     @commands.has_permissions(administrator=True)
@@ -298,7 +298,25 @@ class Streamer(commands.Cog):
             return await ctx.send("I am not following any users on this channel!")
         usernames = [t[0] for t in usernames]
 
-        await self.remove(ctx, channel, usernames)
+        await self.remove(ctx, this_channel.id, usernames)
+
+    @commands.command()
+    @commands.is_owner()
+    async def cleardeleted(self, ctx):
+        """Remove all follows from deleted channels to increase performance"""
+        changes = False
+        for username, channel in db.query("SELECT username, channel_id FROM follows"):
+            exists = self.client.get_channel(channel) is not None
+            if exists:
+                continue
+            else:
+                await self.remove(ctx, channel, [username], prompt_reset=False)
+                changes = True
+
+        if changes:
+            await ctx.send('Use `$reset` to apply changes.')
+        else:
+            await ctx.send('Nothing to delete!')
 
     @commands.command(hidden=True)
     @commands.is_owner()
