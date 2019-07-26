@@ -31,20 +31,25 @@ async def get_channel(ctx, mention):
 
 
 class TwoWayIterator:
+    """Two way iterator class that is used as the backend for paging"""
 
     def __init__(self, list_of_stuff):
         self.items = list_of_stuff
         self.index = 0
 
     def next(self):
-        if not self.index == len(self.items) - 1:
+        if self.index == len(self.items) - 1:
+            return None
+        else:
             self.index += 1
-        return self.items[self.index]
+            return self.items[self.index]
 
     def previous(self):
-        if not self.index == 0:
+        if self.index == 0:
+            return None
+        else:
             self.index -= 1
-        return self.items[self.index]
+            return self.items[self.index]
 
     def current(self):
         return self.items[self.index]
@@ -65,7 +70,7 @@ def create_pages(content, rows, maxrows=15):
         if len(content.description) + len(row) < 2000 and thisrow < maxrows+1:
             content.description += f"\n{row}"
         else:
-            thisrow = 0
+            thisrow = 1
             pages.append(content)
             content = copy.deepcopy(content)
             content.description = f"{row}"
@@ -76,23 +81,33 @@ def create_pages(content, rows, maxrows=15):
 
 async def page_switcher(ctx, pages):
     """
-    :param ctx    : Context
-    :param pages  : List of embeds to use as pages
+    :param ctx   : Context
+    :param pages : List of embeds to use as pages
     """
     pages = TwoWayIterator(pages)
-    pages.current().set_footer(text=f"page 1 of {len(pages.items)}")
+
+    # add all page numbers
+    for i, page in enumerate(pages.items, start=1):
+        old_footer = page.footer.text
+        if old_footer == discord.Embed.Empty:
+            old_footer = None
+        page.set_footer(text=f"{i}/{len(pages.items)}" + (f' | {old_footer}' if old_footer is not None else ''))
+
     msg = await ctx.send(embed=pages.current())
 
     async def switch_page(content):
-        content.set_footer(text=f"page {pages.index + 1} of {len(pages.items)}")
         await msg.edit(embed=content)
 
     async def previous_page():
         content = pages.previous()
+        if content is None:
+            return
         await switch_page(content)
 
     async def next_page():
         content = pages.next()
+        if content is None:
+            return
         await switch_page(content)
 
     functions = {"⬅": previous_page,
@@ -105,7 +120,7 @@ async def reaction_buttons(ctx, message, functions, timeout=600.0, only_author=F
     """Handler for reaction buttons
     :param message     : message to add reactions to
     :param functions   : dictionary of {emoji : function} pairs. functions must be async. return True to exit
-    :param timeout     : float, default 10 minutes (600.0)
+    :param timeout     : time in seconds for how long the buttons work for default 10 minutes (600.0)
     :param only_author : only allow the user who used the command use the buttons
     :param single_use  : delete buttons after one is used
     """
@@ -126,7 +141,10 @@ async def reaction_buttons(ctx, message, functions, timeout=600.0, only_author=F
             break
         else:
             exits = await functions[str(reaction.emoji)]()
-            await message.remove_reaction(reaction.emoji, user)
+            try:
+                await message.remove_reaction(reaction.emoji, user)
+            except discord.errors.NotFound:
+                pass
             if single_use or exits is True:
                 break
 
