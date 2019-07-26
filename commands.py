@@ -23,26 +23,26 @@ class Commands(commands.Cog):
     async def info(self, ctx):
         """Get information about the bot."""
         appinfo = await self.client.application_info()
-        info_embed = discord.Embed(title="Fansite Bot | version 3.0",
-                                   description=f"Created by {appinfo.owner.mention}\n\n"
-                                   f'This is a bot mainly made for tracking kpop fansites on twitter, but it works '
-                                   f'just fine for any twitter accounts.\n'
-                                   f'use `{self.client.command_prefix}help` for the list of commands.\n\n'
-                                   f'Currently following **{len(db.get_user_ids())}** accounts '
-                                   f'across **{len(self.client.guilds)}** servers.\n\n',
-                                   colour=discord.Color.blue())
-        info_embed.add_field(name='Github', value='https://github.com/joinemm/fansite-bot', inline=False)
-        info_embed.add_field(name='Patreon', value="https://www.patreon.com/joinemm", inline=False)
-        info_embed.set_thumbnail(url=self.client.user.avatar_url)
-        await ctx.send(embed=info_embed)
+        membercount = len(set(self.client.get_all_members()))
+        content = discord.Embed(title=f"Fansite Bot | version 3.5", colour=discord.Color.blue())
+        content.description = (f"Created by {appinfo.owner.mention}\n\n"
+                              f'This is a bot mainly made for tracking kpop fansites on twitter, but it works '
+                              f'just fine for any twitter accounts.\n'
+                              f'use `{self.client.command_prefix}help` for the list of commands.\n\n'
+                              f'Currently following **{len(db.get_user_ids())}** accounts '
+                              f'across **{len(self.client.guilds)}** servers totaling {membercount} unique members')
+        content.add_field(name='Github', value='https://github.com/joinemm/fansite-bot', inline=False)
+        content.add_field(name='Patreon', value="https://www.patreon.com/joinemm", inline=False)
+        content.set_thumbnail(url=self.client.user.avatar_url)
+        await ctx.send(embed=content)
 
     @commands.command()
     async def ping(self, ctx):
         """Get the bot's ping"""
         pong_msg = await ctx.send(":ping_pong:")
         sr_lat = (pong_msg.created_at - ctx.message.created_at).total_seconds() * 1000
-        await pong_msg.edit(content=f"Command latency = `{sr_lat}ms`\n"
-                                    f"API heartbeat = `{self.client.latency * 1000:.1f}ms`")
+        await pong_msg.edit(content=f"Command latency = `{sr_lat}`ms\n"
+                                    f"Discord latency = `{self.client.latency * 1000:.1f}`ms")
 
     @commands.command()
     async def changelog(self, ctx):
@@ -50,7 +50,7 @@ class Commands(commands.Cog):
         author = "joinemm"
         repo = "fansite-bot"
         data = get_commits(author, repo)
-        content = discord.Embed(color=discord.Color.from_rgb(255, 255, 255))
+        content = discord.Embed(color=discord.Color.from_rgb(46, 188, 79))
         content.set_author(name="Github commit history", icon_url=data[0]['author']['avatar_url'],
                            url=f"https://github.com/{author}/{repo}/commits/master")
         content.set_thumbnail(url='http://www.logospng.com/images/182/github-icon-182553.png')
@@ -58,17 +58,17 @@ class Commands(commands.Cog):
         pages = []
         i = 0
         for commit in data:
-            if i == 10:
+            if i == 5:
                 pages.append(content)
                 content = copy.deepcopy(content)
                 content.clear_fields()
                 i = 0
             sha = commit['sha'][:7]
-            author = commit['author']['login']
-            date = commit['commit']['author']['date']
+            author = commit['author'].get('login') if commit['author'] else 'UNKNOWN'
+            date = commit['commit']['author'].get('date')
             arrow_date = arrow.get(date)
             url = commit['html_url']
-            content.add_field(name=f"[`{sha}`] **{commit['commit']['message']}**",
+            content.add_field(name=f"[`{sha}`] {commit['commit'].get('message')}",
                               value=f"**{author}** committed {arrow_date.humanize()} | [link]({url})",
                               inline=False)
             i += 1
@@ -175,29 +175,20 @@ class Commands(commands.Cog):
         else:
             content.title = f"Followed users in **{ctx.guild.name}**"
 
-        pages = utils.create_pages(content, rows, 25)
-        if len(pages) > 1:
-            await utils.page_switcher(ctx, pages)
-        else:
-            await ctx.send(embed=pages[0])
+        await utils.send_as_pages(ctx, content, rows)
 
     @commands.command(hidden=True)
     @commands.is_owner()
     async def guilds(self, ctx):
-        """Show all connected guilds and the amount of follows"""
-        guilds = []
-        followers = db.get_user_ids()
-        for user_id in followers:
-            for channel_id in db.get_channels(int(user_id)):
-                channel = self.client.get_channel(int(channel_id))
-                if channel is None:
-                    continue
-                guilds.append(channel.guild.id)
+        """Show all connected guilds"""
+        membercount = len(set(self.client.get_all_members()))
+        content = discord.Embed(title=f"Total **{len(self.client.guilds)}** guilds, **{membercount}** unique users")
 
-        content = "**Connected guilds:**\n"
-        for guild in self.client.guilds:
-            content += f"[`{guild.id}`] **{guild.name}** - {guild.member_count} members / {guilds.count(guild.id)} follows\n"
-        await ctx.send(content)
+        rows = []
+        for guild in sorted(self.client.guilds, key=lambda x: x.member_count, reverse=True):
+            rows.append(f"[`{guild.id}`] **{guild.member_count}** members : **{guild.name}**")
+
+        await utils.send_as_pages(ctx, content, rows)
 
     @commands.command(hidden=True)
     @commands.is_owner()

@@ -339,10 +339,9 @@ class Streamer(commands.Cog):
     async def status(self, ctx):
         """Get the bot's status"""
         up_time = time.time() - self.start_time
-        uptime_string = utils.stringfromtime(up_time)
-
+        uptime_string = utils.stringfromtime(up_time, 2)
         stime = time.time() - psutil.boot_time()
-        system_uptime_string = utils.stringfromtime(stime)
+        system_uptime_string = utils.stringfromtime(stime, 2)
 
         mem = psutil.virtual_memory()
         pid = os.getpid()
@@ -354,9 +353,9 @@ class Streamer(commands.Cog):
         content.add_field(name="Bot process uptime", value=uptime_string)
         content.add_field(name="System CPU Usage", value=f"{psutil.cpu_percent()}%")
         content.add_field(name="System uptime", value=system_uptime_string)
-        content.add_field(name="System memory Usage", value=f"{mem.percent}%")
+        content.add_field(name="System RAM Usage", value=f"{mem.percent}%")
         content.add_field(name="Bot memory usage", value=f"{memory_use / math.pow(1024, 2):.2f}MB")
-        content.add_field(name="Stream running", value=str(self.get_status()))
+        content.add_field(name="Discord API latency", value=f"{self.client.latency * 1000:.1f}ms")
 
         await ctx.send(embed=content)
 

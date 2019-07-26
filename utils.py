@@ -55,6 +55,20 @@ class TwoWayIterator:
         return self.items[self.index]
 
 
+async def send_as_pages(ctx, content, rows, maxrows=15):
+    """
+    :param ctx     : Context
+    :param content : Base embed
+    :param rows    : Embed description rows
+    :param maxrows : Max amount of rows per page
+    """
+    pages = create_pages(content, rows, maxrows)
+    if len(pages) > 1:
+        await page_switcher(ctx, pages)
+    else:
+        await ctx.send(embed=pages[0])
+
+
 def create_pages(content, rows, maxrows=15):
     """
     :param content : Embed object to use as the base
@@ -155,7 +169,7 @@ async def reaction_buttons(ctx, message, functions, timeout=600.0, only_author=F
         pass
 
 
-def stringfromtime(t):
+def stringfromtime(t, accuracy=4):
     """
     :param t : Time in seconds
     :returns : Formatted string
@@ -174,4 +188,4 @@ def stringfromtime(t):
     if s > 0:
         components.append(f"{int(s)} second" + ("s" if s > 1 else ""))
 
-    return " ".join(components)
+    return " ".join(components[:accuracy])
