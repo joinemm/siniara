@@ -504,8 +504,8 @@ class Streamer(commands.Cog):
                 name="Channel settings",
                 value="\n".join(
                     f"<#{cid}>"
-                    + (f"`fansite={ff}`" if ff else "")
-                    + (f"`ignoretext={it}`" if it else "")
+                    + (f"`fansite={ff}`" if ff != guild_settings[0] else "")
+                    + (f"`ignoretext={it}`" if it != guild_settings[1] else "")
                     for cid, ff, it in channel_settings
                 ),
             )
@@ -513,10 +513,7 @@ class Streamer(commands.Cog):
             content.add_field(
                 name="User settings",
                 value="\n".join(
-                    f"<#{cid}>"
-                    + (f"`fansite={ff}`" if ff else "")
-                    + (f"`ignoretext={it}`" if it else "")
-                    for cid, ff, it in user_settings
+                    f"<#{cid}> `fansite={ff}` `ignoretext={it}`" for cid, ff, it in user_settings
                 ),
             )
         await ctx.send(embed=content)
