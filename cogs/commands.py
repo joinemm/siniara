@@ -16,7 +16,6 @@ class Commands(commands.Cog):
     @commands.command()
     async def info(self, ctx):
         """Get information about the bot."""
-        membercount = len(set(self.bot.get_all_members()))
         followcount = len(await queries.get_filter(self.bot.db))
         content = discord.Embed(title="Fansite Bot v4.0", colour=self.bot.twitter_blue)
         content.description = (
@@ -25,7 +24,7 @@ class Commands(commands.Cog):
             f"just fine for any twitter accounts.\n\n"
             f"use `{self.bot.command_prefix}help` for the list of commands.\n\n"
             f"Currently following **{followcount}** twitter accounts "
-            f"across **{len(self.bot.guilds)}** servers totaling **{membercount}** unique members"
+            f"across **{len(self.bot.guilds)}** guilds."
         )
         content.add_field(
             name="Github", value="https://github.com/joinemm/fansite-bot", inline=False
@@ -60,24 +59,17 @@ class Commands(commands.Cog):
         """Get the bot's ping."""
         pong_msg = await ctx.send(":ping_pong:")
         sr_lat = (pong_msg.created_at - ctx.message.created_at).total_seconds() * 1000
-        await pong_msg.edit(
-            content=None,
-            embed=discord.Embed(
-                description=(
-                    f"Command response -> `{sr_lat}`ms\n"
-                    f"Discord heartbeat -> `{self.bot.latency * 1000:.1f}`ms"
-                ),
-                color=self.bot.twitter_blue,
-            ),
-        )
+        content = discord.Embed(color=self.bot.twitter_blue)
+        content.add_field(name="Heartbeat :heartbeat:", value=f"`{self.bot.latency * 1000:.1f}`ms")
+        content.add_field(name="ACK", value=f"`{sr_lat}`ms")
+        await pong_msg.edit(content=None, embed=content)
 
     @commands.command()
     @commands.is_owner()
     async def guilds(self, ctx):
         """Show all connected guilds."""
-        membercount = len(set(self.bot.get_all_members()))
         content = discord.Embed(
-            title=f"Total **{len(self.bot.guilds)}** guilds, **{membercount}** unique users",
+            title=f"Active on {len(self.bot.guilds)}** guilds",
             color=self.bot.twitter_blue,
         )
 
