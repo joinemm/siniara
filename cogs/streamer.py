@@ -114,7 +114,7 @@ class Streamer(commands.Cog):
         self.twitter_stream = tweepy.Stream(
             self.auth, Listener(self, filter_array), tweet_mode="extended", daemon=True
         )
-        self.update_presence(len(filter_array))
+        await self.update_presence(len(filter_array))
         self.last_connection = time()
         self.twitter_stream.filter(follow=filter_array, is_async=True)
 
