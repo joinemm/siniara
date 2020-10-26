@@ -447,6 +447,7 @@ class Streamer(commands.Cog):
         await pages.start(ctx)
 
     @commands.group()
+    @commands.has_permissions(manage_guild=True)
     async def config(self, ctx):
         """
         Configure posting options per guild, channel or user.
@@ -611,7 +612,6 @@ class Streamer(commands.Cog):
         await ctx.send(":white_check_mark: Twitter stream refreshed")
 
     @commands.command()
-    @commands.is_owner()
     async def status(self, ctx):
         """Get the status of the twitter stream."""
         state = (

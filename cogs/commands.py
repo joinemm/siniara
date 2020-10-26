@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-from modules import logger as log, menus, database_actions as queries, exceptions
+from modules import logger as log, menus, database_actions as queries
 import psutil
 import os
 import math
@@ -93,7 +93,6 @@ class Commands(commands.Cog):
         await pages.start(ctx)
 
     @commands.command(name="list", aliases=["follows"])
-    @commands.has_permissions(manage_guild=True)
     async def followslist(self, ctx, channel: discord.TextChannel = None):
         """List all followed accounts on server or channel"""
         data = await self.bot.db.execute(
