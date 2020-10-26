@@ -9,7 +9,7 @@ class Events(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         """Runs when the bot connects to the discord servers"""
-        self.bot.logger.info("Bot is ready")
+        self.bot.logger.info(f"Logged in as {self.bot.user}")
 
     @commands.Cog.listener()
     async def on_command_completion(self, ctx):
