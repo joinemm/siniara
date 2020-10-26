@@ -1,0 +1,6 @@
+*.code-workspace
+*.vscode
+/venv
+*__pycache__
+config.toml
+*.log
