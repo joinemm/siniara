@@ -94,13 +94,14 @@ class Streamer(commands.Cog):
 
     async def refresh_stream(self):
         """Refresh the twitter stream."""
-        self.disconnect_stream()
+        if self.twitter_stream is not None:
+            self.disconnect_stream()
         logger.warning("Reconnecting streamer...")
         self.bot.loop.create_task(self.run_stream())
 
     async def run_stream(self):
         """Run the twitter stream in a new thread."""
-        await asyncio.sleep(1)  # wait a little bit for database pooling to become available
+        await self.bot.wait_until_ready()
         filter_array = await queries.get_filter(self.bot.db)
         while not filter_array:
             await asyncio.sleep(60)
@@ -113,8 +114,13 @@ class Streamer(commands.Cog):
         self.twitter_stream = tweepy.Stream(
             self.auth, Listener(self, filter_array), tweet_mode="extended", daemon=True
         )
+        self.update_presence(self, len(filter_array))
         self.last_connection = time()
         self.twitter_stream.filter(follow=filter_array, is_async=True)
+
+    async def update_presence(self, count):
+        """Update the amount of fansites displayed on the bot presence."""
+        await self.bot.change_presence(activity=discord.Activity(name=f"{count} Fansites", type=3))
 
     async def statushandler(self, status):
         """Handle an incoming twitter status."""
@@ -473,6 +479,7 @@ class Streamer(commands.Cog):
         guild_settings = await self.bot.db.execute(
             "SELECT fansite_format, ignore_text FROM guild_settings WHERE guild_id = %s",
             ctx.guild.id,
+            onerow=True,
         )
         user_settings = await self.bot.db.execute(
             """
@@ -485,6 +492,13 @@ class Streamer(commands.Cog):
         )
 
         content = discord.Embed(title="Current configuration")
+        if guild_settings:
+            content.add_field(
+                name="Guild settings",
+                value=""
+                + (f"`fansite={guild_settings[0]}`" if guild_settings[0] else "")
+                + (f"`ignoretext={guild_settings[1]}`" if guild_settings[1] else ""),
+            )
         if channel_settings:
             content.add_field(
                 name="Channel settings",
@@ -494,13 +508,6 @@ class Streamer(commands.Cog):
                     + (f"`ignoretext={it}`" if it else "")
                     for cid, ff, it in channel_settings
                 ),
-            )
-        if guild_settings:
-            content.add_field(
-                name="Guild settings",
-                value=""
-                + (f"`fansite={guild_settings[0]}`" if guild_settings[0] else "")
-                + (f"`ignoretext={guild_settings[1]}`" if guild_settings[1] else ""),
             )
         if user_settings:
             content.add_field(
