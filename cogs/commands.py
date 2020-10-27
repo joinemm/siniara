@@ -60,8 +60,10 @@ class Commands(commands.Cog):
         pong_msg = await ctx.send(":ping_pong:")
         sr_lat = (pong_msg.created_at - ctx.message.created_at).total_seconds() * 1000
         content = discord.Embed(color=self.bot.twitter_blue)
-        content.add_field(name="Heartbeat :heartbeat:", value=f"`{self.bot.latency * 1000:.1f}`ms")
-        content.add_field(name="ACK", value=f"`{sr_lat}`ms")
+        content.add_field(
+            name=":heartbeat: Heartbeat", value=f"`{self.bot.latency * 1000:.1f}`ms", inline=False
+        )
+        content.add_field(name=":handshake: ACK", value=f"`{sr_lat}`ms", inline=False)
         await pong_msg.edit(content=None, embed=content)
 
     @commands.command()
