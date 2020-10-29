@@ -85,12 +85,15 @@ class Streamer(commands.Cog):
 
     async def check_for_filter_changes(self):
         """Check if new follows have been added to the database and reset stream if so."""
-        if not await self.stream_running():
+        if self.twitter_stream is None:
             return
 
-        filter_array = await queries.get_filter(self.bot.db)
-        if filter_array != self.twitter_stream.listener.current_filter:
+        if not await self.stream_running():
             await self.refresh_stream()
+        else:
+            filter_array = await queries.get_filter(self.bot.db)
+            if filter_array != self.twitter_stream.listener.current_filter:
+                await self.refresh_stream()
 
     async def refresh_stream(self):
         """Refresh the twitter stream."""
