@@ -11,11 +11,11 @@ Optionally you can also run your own instance of the bot.
 
 > These instructions assume you already have a local MariaDB instance running and set up
 
-Get the source code and setup python environment using pipenv:
+Get the source code and setup python environment using poetry:
 ```
 $ git clone https://joinemm/fansite-bot
 $ cd fansite-bot
-$ pipenv install
+$ poetry install
 ```
 
 Fill out the `config.toml.example` with your own values and rename it to `config.toml`.
@@ -29,5 +29,5 @@ $ mysql fansitebot < sql/schema.sql
 If everything went good you should be able to run the bot now:
 
 ```
-$ pipenv run python main.py
+$ poetry run python main.py
 ```
