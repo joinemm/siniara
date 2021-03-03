@@ -135,7 +135,14 @@ class Streamer(commands.Cog):
             return
 
         # status is filtered out, get tweet object and send it to channels
-        tweet = self.api.get_status(str(status.id), tweet_mode="extended", include_entities=True)
+        try:
+            tweet = self.api.get_status(
+                str(status.id), tweet_mode="extended", include_entities=True
+            )
+        except tweepy.TweepError:
+            logger.warning(f"No status found with ID {status.id}")
+            return
+
         for channel_id in await queries.get_channels(self.bot.db, tweet.user.id):
             channel = self.bot.get_channel(channel_id)
             if channel is None:
