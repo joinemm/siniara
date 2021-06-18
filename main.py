@@ -27,7 +27,7 @@ intents = discord.Intents(
 extensions = ["cogs.events", "cogs.commands", "cogs.errorhandler", "cogs.streamer"]
 
 
-class FansiteBot(commands.AutoShardedBot):
+class Siniara(commands.AutoShardedBot):
     def __init__(self, **kwargs):
         self.config = Config("config.toml")
         super().__init__(
@@ -49,7 +49,7 @@ class FansiteBot(commands.AutoShardedBot):
         await super().on_message(message)
 
 
-bot = FansiteBot(
+bot = Siniara(
     case_insensitive=True,
     help_command=helpcommand.EmbedHelpCommand(),
     allowed_mentions=discord.AllowedMentions(everyone=False),

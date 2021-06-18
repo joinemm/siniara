@@ -17,12 +17,11 @@ class Commands(commands.Cog):
     async def info(self, ctx):
         """Get information about the bot."""
         followcount = len(await queries.get_filter(self.bot.db))
-        content = discord.Embed(title="Fansite Bot v4.0", colour=self.bot.twitter_blue)
+        content = discord.Embed(title="Siniara v5.0", colour=self.bot.twitter_blue)
         owner = self.bot.get_user(self.bot.owner_id)
         content.description = (
-            f"Created by **{owner}**<@{self.bot.owner_id}>\n\n"
-            f"This is a bot mainly made for tracking kpop fansites on twitter, but it works "
-            f"just fine for any twitter accounts.\n\n"
+            f"Bot for fetching new media content from twitter, "
+            f"created by **{owner}**<@{self.bot.owner_id}>\n\n"
             f"use `{self.bot.command_prefix}help` for the list of commands.\n\n"
             f"Currently following **{followcount}** twitter accounts "
             f"across **{len(self.bot.guilds)}** guilds."
