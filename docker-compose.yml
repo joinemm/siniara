@@ -2,7 +2,7 @@ version: '3.7'
 
 services:
   db:
-    container_name: fansite-bot-db
+    container_name: siniara-db
     image: mariadb
     restart: unless-stopped
     volumes:
@@ -11,13 +11,13 @@ services:
     environment:
       - MARIADB_USER=bot
       - MARIADB_PASSWORD=botpw
-      - MARIADB_DATABASE=fansitebot
+      - MARIADB_DATABASE=siniara
       - MARIADB_ROOT_PASSWORD=secure-af
     networks:
       - botnet
 
   bot:
-    container_name: fansite-bot
+    container_name: siniara-bot
     build: .
     command: python main.py
     restart: unless-stopped

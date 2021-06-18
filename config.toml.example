@@ -15,8 +15,8 @@ access_token = ""
 access_secret = ""
 
 [database]
-host = "fansite-bot-db"
+host = "siniara-db"
 port = 3306
 user = "bot"
 password = "botpw"
-db = "fansitebot"
+db = "siniara"

@@ -1,8 +1,7 @@
 [tool.poetry]
-name = "fansite-bot"
-version = "4.1"
-description = ""
-authors = ["Your Name <you@example.com>"]
+name = "Siniara"
+version = "5.0"
+description = "Follow twitter accounts on discord"
 license = "MIT"
 
 [tool.poetry.dependencies]
