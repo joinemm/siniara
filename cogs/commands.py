@@ -18,8 +18,9 @@ class Commands(commands.Cog):
         """Get information about the bot."""
         followcount = len(await queries.get_filter(self.bot.db))
         content = discord.Embed(title="Fansite Bot v4.0", colour=self.bot.twitter_blue)
+        owner = self.bot.get_user(self.bot.owner_id)
         content.description = (
-            f"Created by <@{self.bot.owner_id}>\n\n"
+            f"Created by **{owner}**<@{self.bot.owner_id}>\n\n"
             f"This is a bot mainly made for tracking kpop fansites on twitter, but it works "
             f"just fine for any twitter accounts.\n\n"
             f"use `{self.bot.command_prefix}help` for the list of commands.\n\n"
@@ -82,33 +83,6 @@ class Commands(commands.Cog):
             rows.append(
                 f"`#{i:2}`[`{guild.id}`] **{guild.member_count}** members : **{guild.name}**"
             )
-
-        pages = menus.Menu(source=menus.ListMenu(rows, embed=content), clear_reactions_after=True)
-        await pages.start(ctx)
-
-    @commands.command(name="list", aliases=["follows"])
-    async def followslist(self, ctx, channel: discord.TextChannel = None):
-        """List all followed accounts on server or channel"""
-        data = await self.bot.db.execute(
-            """
-            SELECT twitter_user.username, channel_id, added_on
-            FROM follow LEFT JOIN twitter_user
-            ON twitter_user.user_id = follow.twitter_user_id WHERE guild_id = %s
-            """
-            + (f" AND channel_id = {channel.id}" if channel is not None else "")
-            + " ORDER BY channel_id, added_on DESC",
-            ctx.guild.id,
-        )
-        content = discord.Embed(title="Followed twitter users", color=self.bot.twitter_blue)
-        rows = []
-        for username, channel_id, added_on in data:
-            rows.append(
-                (f"<#{channel_id}> < " if channel is None else "")
-                + f"**@{username}** (since {added_on} UTC)"
-            )
-
-        if not rows:
-            rows.append("Nothing yet :(")
 
         pages = menus.Menu(source=menus.ListMenu(rows, embed=content), clear_reactions_after=True)
         await pages.start(ctx)

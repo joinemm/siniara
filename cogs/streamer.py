@@ -177,46 +177,21 @@ class Streamer(commands.Cog):
             media_files.append((media_type, media_url))
 
         tweet_config = await queries.tweet_config(self.bot.db, channel, tweet.user.id)
-        if not media_files and tweet_config["ignore_text"]:
-            return
 
-        if not media_files or not tweet_config["fansite_format"]:
-            content = discord.Embed(colour=int(tweet.user.profile_link_color, 16))
-            content.set_author(
-                icon_url=tweet.user.profile_image_url,
-                name=f"@{tweet.user.screen_name}",
-                url=f"https://twitter.com/{tweet.user.screen_name}/status/{tweet.id}",
-            )
-            content.description = tweet.full_text
-
-            if media_files:
-                first = True
-                for file in media_files:
-                    if file[0] == "image":
-                        content.set_image(url=file[1].replace(".jpg", "?format=jpg&name=orig"))
-                        await channel.send(embed=content)
-                    else:
-                        content._image = None
-                        if first:
-                            await channel.send(embed=content)
-                        await channel.send(file[1])
-                    if first:
-                        content.description = None
-                        content._author = None
-                        first = False
-
-            else:
-                await channel.send(embed=content)
-        else:
+        if media_files:
             timestamp = arrow.get(tweet.created_at).format("YYMMDD")
             nums = re.findall(r"(\d{6})", tweet.full_text)
             number = ", ".join(nums)
             if number == "":
                 # no date specified in post, use posted on date
-                number = "*" + str(timestamp)
+                number = str(timestamp) + "*"
 
-            tweet_link = tweet.full_text.split(" ")[-1]
-            caption = f"```java\n{number} | @{tweet.user.screen_name} | {tweet_link[len('https://'):]}\n```"
+            tweet_link = "https://" + tweet.full_text.split(" ")[-1].split("https://")[-1]
+            caption = (
+                f":bust_in_silhouette: **@{tweet.user.screen_name}**\n"
+                f":calendar: {number}\n"
+                f":link: <{tweet_link}>"
+            )
             files = []
             # download file and rename, upload to discord
             async with aiohttp.ClientSession() as session:
@@ -232,20 +207,44 @@ class Streamer(commands.Cog):
                         )
 
                     filename = f"{timestamp}-@{tweet.user.screen_name}-{tweet.id}-{n}.{extension}"
+                    too_big = False
+                    max_filesize = 8388608  # discord has 8MB file size limit
                     async with session.get(media_url) as response:
-                        with open(filename, "wb") as f:
-                            while True:
-                                block = await response.content.read(1024)
-                                if not block:
-                                    break
-                                f.write(block)
+                        if (
+                            int(response.headers.get("content-length", max_filesize + 1))
+                            > max_filesize
+                        ):
+                            too_big = True
+                        else:
+                            with open(filename, "wb") as f:
+                                while True:
+                                    block = await response.content.read(1024)
+                                    if not block:
+                                        break
+                                    f.write(block)
 
-                    with open(filename, "rb") as f:
-                        files.append(discord.File(f))
+                    if too_big:
+                        caption += f"\n{media_url}"
+                    else:
+                        with open(filename, "rb") as f:
+                            files.append(discord.File(f))
 
-                    os.remove(filename)
+                        os.remove(filename)
 
             await channel.send(caption, files=files)
+
+        else:
+            if tweet_config["media_only"]:
+                return
+
+            content = discord.Embed(colour=int(tweet.user.profile_link_color, 16))
+            content.set_author(
+                icon_url=tweet.user.profile_image_url,
+                name=f"@{tweet.user.screen_name}",
+                url=f"https://twitter.com/{tweet.user.screen_name}/status/{tweet.id}",
+            )
+            content.description = tweet.full_text
+            await channel.send(embed=content)
 
     async def follow(self, channel, user_id, username, timestamp):
         await self.bot.db.execute(
@@ -462,38 +461,104 @@ class Streamer(commands.Cog):
         pages = menus.Menu(source=menus.ListMenu(rows, embed=content), clear_reactions_after=True)
         await pages.start(ctx)
 
+    @commands.command(name="list", aliases=["follows"])
+    async def followslist(self, ctx, channel: discord.TextChannel = None):
+        """List all followed accounts on server or channel"""
+        data = await self.bot.db.execute(
+            """
+            SELECT twitter_user.username, channel_id, added_on
+            FROM follow LEFT JOIN twitter_user
+            ON twitter_user.user_id = follow.twitter_user_id WHERE guild_id = %s
+            """
+            + (f" AND channel_id = {channel.id}" if channel is not None else "")
+            + " ORDER BY channel_id, added_on DESC",
+            ctx.guild.id,
+        )
+        content = discord.Embed(title="Followed twitter users", color=self.bot.twitter_blue)
+        rows = []
+        for username, channel_id, added_on in data:
+            rows.append(
+                (f"<#{channel_id}> < " if channel is None else "")
+                + f"**@{username}** (since {added_on} UTC)"
+            )
+
+        if not rows:
+            rows.append("Nothing yet :(")
+
+        pages = menus.Menu(source=menus.ListMenu(rows, embed=content), clear_reactions_after=True)
+        await pages.start(ctx)
+
     @commands.group()
     @commands.has_permissions(manage_guild=True)
-    async def config(self, ctx):
+    async def mediaonly(self, ctx):
         """
-        Configure posting options per guild, channel or user.
-
-        <configtype> is one of [ channel | user | guild ]
+        Ignore tweets without any media in them.
 
         Config hierarchy is as follows:
             1. User settings overwrite everything else.
             2. Channel settings overwrite guild settings.
             2. Guild settings overwrite default settings.
-            3. If nothing is set, default options will be used.
+            3. If nothing is set, default option is post everything.
         """
         if ctx.invoked_subcommand is None:
             await ctx.send_help(ctx.command)
 
-    @config.command()
-    async def current(self, ctx):
-        """Show all the current configurations on this server."""
+    @mediaonly.command(name="guild")
+    async def mediaonly_guild(self, ctx, value: bool):
+        """Guild level setting."""
+        await queries.set_config_guild(self.bot.db, ctx.guild.id, "media_only", value)
+        await ctx.send(f":white_check_mark: Guild setting **Media only** is now **{value}**")
+
+    @mediaonly.command(name="channel")
+    async def mediaonly_channel(self, ctx, channel: discord.TextChannel, value: bool):
+        """Channel level setting."""
+        await queries.set_config_channel(self.bot.db, channel, "media_only", value)
+        await ctx.send(
+            f":white_check_mark: Channel setting **Media only** is now **{value}** in {channel.mention}"
+        )
+
+    @mediaonly.command(name="user")
+    async def mediaonly_user(self, ctx, username, value: bool):
+        """User level setting."""
+        user_id = await self.bot.db.execute(
+            """
+            SELECT twitter_user.user_id
+            FROM follow RIGHT JOIN twitter_user
+            ON twitter_user.user_id = follow.twitter_user_id
+            WHERE twitter_user.username = %s AND guild_id = %s""",
+            username,
+            ctx.guild.id,
+            one_value=True,
+        )
+        if not user_id:
+            raise exceptions.Info(f'No channel on this server is following "@{username}"')
+
+        await queries.set_config_user(self.bot.db, ctx.guild.id, user_id, "media_only", value)
+        await ctx.send(
+            f":white_check_mark: User setting **Media only** is now **{value}** for **@{username}**"
+        )
+
+    @mediaonly.command(name="clear")
+    async def mediaonly_clear(self, ctx):
+        """Clear all current config."""
+        await queries.clear_config(self.bot.db, ctx.guild)
+        await ctx.send(":white_check_mark: Settings cleared")
+
+    @mediaonly.command(name="current")
+    async def mediaonly_current(self, ctx):
+        """Show the current configuration."""
         channel_settings = await self.bot.db.execute(
-            "SELECT channel_id, fansite_format, ignore_text FROM channel_settings WHERE guild_id = %s",
+            "SELECT channel_id, media_only FROM channel_settings WHERE guild_id = %s",
             ctx.guild.id,
         )
-        guild_settings = await self.bot.db.execute(
-            "SELECT fansite_format, ignore_text FROM guild_settings WHERE guild_id = %s",
+        guild_setting = await self.bot.db.execute(
+            "SELECT media_only FROM guild_settings WHERE guild_id = %s",
             ctx.guild.id,
-            onerow=True,
+            one_value=True,
         )
         user_settings = await self.bot.db.execute(
             """
-            SELECT twitter_user.username, fansite_format, ignore_text
+            SELECT twitter_user.username, media_only
             FROM user_settings RIGHT OUTER JOIN twitter_user
             ON twitter_user.user_id = user_settings.twitter_user_id
             WHERE guild_id = %s
@@ -502,99 +567,27 @@ class Streamer(commands.Cog):
         )
 
         content = discord.Embed(title="Current configuration")
-        if guild_settings:
-            content.add_field(
-                name="Guild settings",
-                value=""
-                + (f"`fansite={guild_settings[0]}`" if guild_settings[0] else "")
-                + (f"`ignoretext={guild_settings[1]}`" if guild_settings[1] else ""),
-            )
+        content.add_field(
+            name="Guild setting",
+            value=f"Media only {':white_check_mark:' if guild_setting else ':x:'}",
+        )
         if channel_settings:
             content.add_field(
                 name="Channel settings",
                 value="\n".join(
-                    f"<#{cid}>"
-                    + (f"`fansite={ff}`" if ff != guild_settings[0] else "")
-                    + (f"`ignoretext={it}`" if it != guild_settings[1] else "")
-                    for cid, ff, it in channel_settings
+                    f"<#{cid}> Media only {':white_check_mark:' if val else ':x:'}"
+                    for cid, val in channel_settings
                 ),
             )
         if user_settings:
             content.add_field(
                 name="User settings",
                 value="\n".join(
-                    f"<#{cid}> `fansite={ff}` `ignoretext={it}`" for cid, ff, it in user_settings
+                    f"**@{uname}** Media only {':white_check_mark:' if val else ':x:'}"
+                    for uname, val in user_settings
                 ),
             )
         await ctx.send(embed=content)
-
-    @config.command()
-    async def fansiteformat(self, ctx, configtype, *value):
-        """Post tweets in fansite formatting eg. 201022 | @hf_dreamcatcher"""
-        await self.config_command(ctx, "fansite_format", configtype, *value)
-
-    @config.command()
-    async def ignoretext(self, ctx, configtype, *value):
-        """Ignore tweets without any media in them."""
-        await self.config_command(ctx, "ignore_text", configtype, *value)
-
-    async def config_command(self, ctx, setting, configtype, *value):
-        configtype = configtype.lower()
-
-        if configtype == "guild":
-            setting_value = to_bool(value[0])
-            await queries.set_config_guild(self.bot.db, ctx.guild.id, setting, setting_value)
-            await ctx.send(
-                f":white_check_mark: `{setting}` for this server is now **{'ON' if setting_value else 'OFF'}**"
-            )
-
-        elif configtype == "channel":
-            if len(value) < 2:
-                raise exceptions.Info(
-                    "Missing information! To set channel settings use <channel> <value>"
-                )
-            try:
-                channel = await commands.TextChannelConverter().convert(ctx, value[0])
-                if channel.guild != ctx.guild:
-                    raise commands.errors.BadArgument()
-            except commands.errors.BadArgument:
-                raise exceptions.Warning(f'Unable to find channel "{value[0]}"')
-            else:
-                setting_value = to_bool(value[1])
-                await queries.set_config_channel(self.bot.db, channel, setting, setting_value)
-                await ctx.send(
-                    f":white_check_mark: `{setting}` in {channel.mention} is now **{'ON' if setting_value else 'OFF'}**"
-                )
-
-        elif configtype == "user":
-            if len(value) < 2:
-                raise exceptions.Info(
-                    "Missing information! To set user settings use <username> <value>"
-                )
-            setting_value = to_bool(value[1])
-            username = value[0]
-            user_id = await self.bot.db.execute(
-                """
-                SELECT twitter_user.user_id
-                FROM follow RIGHT JOIN twitter_user
-                ON twitter_user.user_id = follow.twitter_user_id
-                WHERE twitter_user.username = %s AND guild_id = %s""",
-                username,
-                ctx.guild.id,
-                onerow=True,
-            )
-            if not user_id:
-                raise exceptions.Info(f"No channel on this server is following **@{username}**")
-            await queries.set_config_user(
-                self.bot.db, ctx.guild.id, user_id[0], setting, setting_value
-            )
-            await ctx.send(
-                f":white_check_mark: `{setting}` for **@{username}** is now **{'ON' if setting_value else 'OFF'}**"
-            )
-        else:
-            raise exceptions.Info(
-                "Unknown configuration type. Use one of [ channel | user | guild ]"
-            )
 
     @commands.command()
     async def get(self, ctx, *tweets):
@@ -602,7 +595,7 @@ class Streamer(commands.Cog):
         try:
             # delete discord automatic embed
             await ctx.message.edit(suppress=True)
-        except discord.Forbidden:
+        except (discord.Forbidden, discord.NotFound):
             pass
 
         for tweet_url in tweets:
@@ -636,13 +629,3 @@ class Streamer(commands.Cog):
 
 def setup(bot):
     bot.add_cog(Streamer(bot))
-
-
-def to_bool(s):
-    lowered = s.lower()
-    if lowered in ("yes", "y", "true", "t", "1", "enable", "on"):
-        return True
-    elif lowered in ("no", "n", "false", "f", "0", "disable", "off"):
-        return False
-    else:
-        raise exceptions.Warning('Unable to convert "{s}" to boolean value')

@@ -30,13 +30,13 @@ async def get_follow_limit(db, guild_id):
         db.bot.config.guild_follow_limit,
     )
     limit = await db.execute(
-        "SELECT follow_limit FROM guild WHERE guild_id = %s", guild_id, onerow=True
+        "SELECT follow_limit FROM guild WHERE guild_id = %s", guild_id, one_row=True
     )
 
     current = await db.execute(
         "SELECT COUNT(DISTINCT twitter_user_id) FROM follow WHERE guild_id = %s",
         guild_id,
-        onerow=True,
+        one_row=True,
     )
     current = current[0] if current else 0
     return current, limit[0]
@@ -44,7 +44,7 @@ async def get_follow_limit(db, guild_id):
 
 async def set_config_guild(db, guild_id, setting, value):
     # just in case, dont allow anything else inside the sql string
-    if setting not in ["fansite_format", "ignore_text"]:
+    if setting not in ["media_only"]:
         logger.error(f"Ignored configtype {setting} from executing in the database!")
     else:
         await db.execute(
@@ -58,7 +58,7 @@ async def set_config_guild(db, guild_id, setting, value):
 
 async def set_config_channel(db, channel, setting, value):
     # just in case, dont allow anything else inside the sql string
-    if setting not in ["fansite_format", "ignore_text"]:
+    if setting not in ["media_only"]:
         logger.error(f"Ignored configtype {setting} from executing in the database!")
     else:
         await db.execute(
@@ -75,7 +75,7 @@ async def set_config_channel(db, channel, setting, value):
 
 async def set_config_user(db, guild_id, user_id, setting, value):
     # just in case, dont allow anything else inside the sql string
-    if setting not in ["fansite_format", "ignore_text"]:
+    if setting not in ["media_only"]:
         logger.error(f"Ignored configtype {setting} from executing in the database!")
     else:
         await db.execute(
@@ -91,35 +91,39 @@ async def set_config_user(db, guild_id, user_id, setting, value):
 
 
 async def tweet_config(db, channel, user_id):
-    channel_settings = await db.execute(
-        "SELECT fansite_format, ignore_text FROM channel_settings WHERE channel_id = %s",
+    channel_setting = await db.execute(
+        "SELECT media_only FROM channel_settings WHERE channel_id = %s",
         channel.id,
-        onerow=True,
+        one_value=True,
     )
-    guild_settings = await db.execute(
-        "SELECT fansite_format, ignore_text FROM guild_settings WHERE guild_id = %s",
+    guild_setting = await db.execute(
+        "SELECT media_only FROM guild_settings WHERE guild_id = %s",
         channel.guild.id,
-        onerow=True,
+        one_value=True,
     )
-    user_settings = await db.execute(
-        "SELECT fansite_format, ignore_text FROM user_settings WHERE twitter_user_id = %s AND guild_id = %s",
+    user_setting = await db.execute(
+        "SELECT media_only FROM user_settings WHERE twitter_user_id = %s AND guild_id = %s",
         user_id,
         channel.guild.id,
-        onerow=True,
+        one_value=True,
     )
     config = {}
 
-    for i, option in enumerate(["fansite_format", "ignore_text"]):
+    if user_setting in (True, False):
+        value = user_setting
+    elif channel_setting in (True, False):
+        value = channel_setting
+    elif guild_setting in (True, False):
+        value = guild_setting
+    else:
+        value = False
 
-        if user_settings and user_settings[i] is not None:
-            value = user_settings[i]
-        elif channel_settings and channel_settings[i] is not None:
-            value = channel_settings[i]
-        elif guild_settings and guild_settings[i] is not None:
-            value = guild_settings[i]
-        else:
-            value = False
-
-        config[option] = value
+    config["media_only"] = value
 
     return config
+
+
+async def clear_config(db, guild):
+    await db.execute("DELETE FROM channel_settings WHERE guild_id = %s", guild.id)
+    await db.execute("DELETE FROM user_settings WHERE guild_id = %s", guild.id)
+    await db.execute("DELETE FROM guild_settings WHERE guild_id = %s", guild.id)
