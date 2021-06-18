@@ -33,9 +33,14 @@ class MariaDB:
         return True
 
     async def initialize_pool(self):
-        self.pool = await aiomysql.create_pool(
-            **self.bot.config.dbcredentials, maxsize=10, autocommit=True
-        )
+        while self.pool is None:
+            try:
+                self.pool = await aiomysql.create_pool(
+                    **self.bot.config.dbcredentials, maxsize=10, autocommit=True
+                )
+            except Exception as e:
+                logger.error(e)
+                await asyncio.sleep(1)
         logger.info("Initialized MariaDB connection pool")
 
     async def cleanup(self):
