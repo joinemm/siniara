@@ -1,0 +1,6 @@
+*.pyc
+.vscode
+.git
+*.example
+*.lock
+sql
