@@ -2,7 +2,7 @@
 
 owner_id = 133311691852218378
 prefix = "$"
-guild_follow_limit = 50
+guild_follow_limit = 30
 guild_unlocked_follow_limit = 500
 
 [keys]
@@ -15,8 +15,8 @@ access_token = ""
 access_secret = ""
 
 [database]
-host = "127.0.0.1"
+host = "fansite-bot-db"
 port = 3306
-user = ""
-password = ""
+user = "bot"
+password = "botpw"
 db = "fansitebot"
