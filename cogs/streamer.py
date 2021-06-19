@@ -146,7 +146,8 @@ class Streamer(commands.Cog):
         for channel_id in await queries.get_channels(self.bot.db, tweet.user.id):
             channel = self.bot.get_channel(channel_id)
             if channel is None:
-                logger.warning(f"Could not find channel #{channel_id}")
+                logger.warning(f"Could not find channel #{channel_id} deleting follow")
+                await self.unfollow(channel_id, tweet.user.id)
             else:
                 await self.send_tweet(channel, tweet)
                 logger.info(
@@ -264,11 +265,11 @@ class Streamer(commands.Cog):
             timestamp,
         )
 
-    async def unfollow(self, channel, user_id):
+    async def unfollow(self, channel_id, user_id):
         await self.bot.db.execute(
             "DELETE FROM follow WHERE twitter_user_id = %s AND channel_id = %s",
             user_id,
-            channel.id,
+            channel_id,
         )
 
     # COMMANDS
@@ -401,7 +402,7 @@ class Streamer(commands.Cog):
                 if (user_id,) not in current_users:
                     status = ":x: User is not being followed on this channel"
                 else:
-                    await self.unfollow(channel, user_id)
+                    await self.unfollow(channel.id, user_id)
                     status = ":white_check_mark: Success"
                     successes += 1
 
@@ -447,7 +448,7 @@ class Streamer(commands.Cog):
             if (user_id,) not in current_users:
                 status = ":x: User is not being followed on this channel"
             else:
-                await self.unfollow(channel, user_id)
+                await self.unfollow(channel.id, user_id)
                 status = ":white_check_mark: Success"
                 successes += 1
 
