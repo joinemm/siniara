@@ -24,8 +24,6 @@ intents = discord.Intents(
     typing=False,
 )
 
-extensions = ["cogs.events", "cogs.commands", "cogs.errorhandler", "cogs.streamer"]
-
 
 class Siniara(commands.AutoShardedBot):
     def __init__(self, **kwargs):
@@ -37,6 +35,9 @@ class Siniara(commands.AutoShardedBot):
         self.start_time = time()
         self.twitter_blue = int("1da1f2", 16)
         self.db = maria.MariaDB(self)
+        self.cogs_to_load = ["cogs.events", "cogs.commands", "cogs.errorhandler", "cogs.streamer"]
+        if self.config.statcord_token is not None:
+            self.cogs_to_load.append("cogs.stats")
 
     async def close(self):
         await self.db.cleanup()
@@ -70,7 +71,7 @@ async def before_any_command(ctx):
 
 def run(bot):
     """Load extensions and run the bot."""
-    for extension in extensions:
+    for extension in bot.cogs_to_load:
         try:
             bot.load_extension(extension)
             bot.logger.info(f"Imported {extension}")
