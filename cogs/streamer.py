@@ -22,7 +22,7 @@ class Listener(tweepy.streaming.StreamListener):
         logger.info("Streamer connected!")
 
     def on_status(self, status):
-        self.streamer.bot.loop.create_task(self.streamer.statushandler(status))
+        asyncio.ensure_future(self.streamer.statushandler(status), loop=self.streamer.bot.loop)
         return True
 
     def on_error(self, status):
