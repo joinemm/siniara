@@ -8,7 +8,7 @@ class Menu(menus.MenuPages):
 
 
 class ListMenu(menus.ListPageSource):
-    def __init__(self, data, per_page=10, embed=None):
+    def __init__(self, data, per_page=20, embed=None):
         if embed is None:
             self.embed = discord.Embed()
         else:

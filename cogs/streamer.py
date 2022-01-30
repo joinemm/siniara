@@ -41,6 +41,7 @@ class Listener(tweepy.streaming.StreamListener):
 class Streamer(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.bot.streamer = self
         self.twitter_stream = None
         self.booted = False
         self.last_connection = 0.0
@@ -106,9 +107,12 @@ class Streamer(commands.Cog):
         """Run the twitter stream in a new thread."""
         await self.bot.wait_until_ready()
         filter_array = await queries.get_filter(self.bot.db)
-        while not filter_array:
-            await asyncio.sleep(60)
-            filter_array = await queries.get_filter(self.bot.db)
+        try:
+            while not filter_array:
+                await asyncio.sleep(60)
+                filter_array = await queries.get_filter(self.bot.db)
+        except KeyboardInterrupt:
+            return
 
         # don't connect more than 1 times per 60 seconds
         if time() - self.last_connection < 60:
@@ -122,8 +126,8 @@ class Streamer(commands.Cog):
         self.twitter_stream.filter(follow=filter_array, is_async=True)
 
     async def update_presence(self, count):
-        """Update the amount of fansites displayed on the bot presence."""
-        await self.bot.change_presence(activity=discord.Activity(name=f"{count} Fansites", type=3))
+        """Update the amount of users displayed on the bot presence."""
+        await self.bot.change_presence(activity=discord.Activity(name=f"{count} accounts", type=3))
 
     async def statushandler(self, status):
         """Handle an incoming twitter status."""
@@ -154,6 +158,15 @@ class Streamer(commands.Cog):
                     f"{tweet.id} by @{tweet.user.screen_name} -> #{channel.name} in {channel.guild.name}"
                 )
 
+    async def resolve_shortened_urls(self, urls):
+        """Expand t.co links to their original urls."""
+        results = []
+        async with aiohttp.ClientSession() as session:
+            for shortened_url in urls:
+                async with session.get(shortened_url) as response:
+                    results.append((shortened_url, response.url))
+        return results
+
     async def send_tweet(self, channel, tweet):
         """Format and send a tweet to given discord channel."""
         media_files = []
@@ -179,24 +192,30 @@ class Streamer(commands.Cog):
 
         tweet_config = await queries.tweet_config(self.bot.db, channel, tweet.user.id)
 
-        if media_files:
-            timestamp = arrow.get(tweet.created_at).format("YYMMDD")
-            nums = re.findall(r"(\d{6})", tweet.full_text)
-            number = ", ".join(nums)
-            if number == "":
-                # no date specified in post, use posted on date
-                number = str(timestamp) + "*"
+        if tweet_config["media_only"] and not media_files:
+            return
 
-            tweet_link = "https://" + tweet.full_text.split(" ")[-1].split("https://")[-1]
-            caption = (
-                f":bust_in_silhouette: **@{tweet.user.screen_name}**\n"
-                f":calendar: {number}\n"
-                f":link: <{tweet_link}>"
-            )
+        timestamp = arrow.get(tweet.created_at)
+        parts = tweet.full_text.rsplit(" ", 1)
+        if len(parts) > 1:
+            tweet_text, tweet_link = parts
+        else:
+            tweet_text = ""
+            tweet_link = parts[0]
+
+        caption = (
+            f"<:twitter:937425165241946162> **@{tweet.user.screen_name}**"
+            f" <t:{int(timestamp.timestamp())}>"
+            f" \n:link: <{tweet_link}>"
+        )
+
+        if not tweet_config["media_only"] and tweet_text:
+            caption += "\n> " + tweet_text.replace("\n", "\n> ")
+
+        if media_files:
             files = []
             # download file and rename, upload to discord
             async with aiohttp.ClientSession() as session:
-                timestamp = arrow.get(tweet.created_at).format("YYMMDD")
                 for n, (media_type, media_url) in enumerate(media_files, start=1):
                     # is image not video
                     if media_type == "video":
@@ -207,7 +226,7 @@ class Streamer(commands.Cog):
                             ".jpeg", "?format=jpeg&name=orig"
                         )
 
-                    filename = f"{timestamp}-@{tweet.user.screen_name}-{tweet.id}-{n}.{extension}"
+                    filename = f"{timestamp.format('YYMMDD')}-@{tweet.user.screen_name}-{tweet.id}-{n}.{extension}"
                     too_big = False
                     max_filesize = 8388608  # discord has 8MB file size limit
                     async with session.get(media_url) as response:
@@ -232,20 +251,7 @@ class Streamer(commands.Cog):
 
                         os.remove(filename)
 
-            await channel.send(caption, files=files)
-
-        else:
-            if tweet_config["media_only"]:
-                return
-
-            content = discord.Embed(colour=int(tweet.user.profile_link_color, 16))
-            content.set_author(
-                icon_url=tweet.user.profile_image_url,
-                name=f"@{tweet.user.screen_name}",
-                url=f"https://twitter.com/{tweet.user.screen_name}/status/{tweet.id}",
-            )
-            content.description = tweet.full_text
-            await channel.send(embed=content)
+        await channel.send(caption, files=files)
 
     async def follow(self, channel, user_id, username, timestamp):
         await self.bot.db.execute(
@@ -314,7 +320,7 @@ class Streamer(commands.Cog):
             title=f":notepad_spiral: Added {successes}/{len(usernames)} users to {channel.name}",
             color=self.bot.twitter_blue,
         )
-        content.set_footer(text="Changes will take effect in the next 5 minutes")
+        content.set_footer(text="Changes will take effect within the next 5 minutes")
         pages = menus.Menu(source=menus.ListMenu(rows, embed=content), clear_reactions_after=True)
         await pages.start(ctx)
 
@@ -367,7 +373,7 @@ class Streamer(commands.Cog):
             title=f":notepad_spiral: Added {successes}/{len(users)} list members to {channel.name}",
             color=self.bot.twitter_blue,
         )
-        content.set_footer(text="Changes will take effect in the next 5 minutes")
+        content.set_footer(text="Changes will take effect within the next 5 minutes")
         pages = menus.Menu(source=menus.ListMenu(rows, embed=content), clear_reactions_after=True)
         await pages.start(ctx)
 
@@ -412,7 +418,7 @@ class Streamer(commands.Cog):
             title=f":notepad_spiral: Removed {successes}/{len(usernames)} users from {channel.name}",
             color=self.bot.twitter_blue,
         )
-        content.set_footer(text="Changes will take effect in the next 5 minutes")
+        content.set_footer(text="Changes will take effect within the next 5 minutes")
         pages = menus.Menu(source=menus.ListMenu(rows, embed=content), clear_reactions_after=True)
         await pages.start(ctx)
 
@@ -458,7 +464,7 @@ class Streamer(commands.Cog):
             title=f":notepad_spiral: Removed {successes}/{len(users)} list members from {channel.name}",
             color=self.bot.twitter_blue,
         )
-        content.set_footer(text="Changes will take effect in the next 5 minutes")
+        content.set_footer(text="Changes will take effect within the next 5 minutes")
         pages = menus.Menu(source=menus.ListMenu(rows, embed=content), clear_reactions_after=True)
         await pages.start(ctx)
 
@@ -567,7 +573,7 @@ class Streamer(commands.Cog):
             ctx.guild.id,
         )
 
-        content = discord.Embed(title="Current configuration")
+        content = discord.Embed(title="Current configuration", color=self.bot.twitter_blue)
         content.add_field(
             name="Guild setting",
             value=f"Media only {':white_check_mark:' if guild_setting else ':x:'}",

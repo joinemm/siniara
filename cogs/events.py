@@ -8,12 +8,12 @@ class Events(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        """Runs when the bot connects to the discord servers"""
+        """Runs when the bot connects to the discord servers."""
         self.bot.logger.info(f"Logged in as {self.bot.user}")
 
     @commands.Cog.listener()
     async def on_command_completion(self, ctx):
-        """Runs when any command is completed succesfully"""
+        """Runs when any command is completed succesfully."""
         # prevent double invocation for subcommands
         if ctx.invoked_subcommand is None:
             took = time() - ctx.time

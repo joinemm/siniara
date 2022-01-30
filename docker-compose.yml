@@ -12,7 +12,6 @@ services:
       - MARIADB_USER=bot
       - MARIADB_PASSWORD=botpw
       - MARIADB_DATABASE=siniara
-      - MARIADB_ROOT_PASSWORD=secure-af
     networks:
       - botnet
 

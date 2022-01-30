@@ -17,17 +17,16 @@ class Commands(commands.Cog):
     async def info(self, ctx):
         """Get information about the bot."""
         followcount = len(await queries.get_filter(self.bot.db))
-        content = discord.Embed(title="Siniara v5.0", colour=self.bot.twitter_blue)
-        owner = self.bot.get_user(self.bot.owner_id)
+        content = discord.Embed(title="Siniara v5.1", colour=self.bot.twitter_blue)
         content.description = (
             f"Bot for fetching new media content from twitter, "
-            f"created by **{owner}**<@{self.bot.owner_id}>\n\n"
+            f"created by **Joinemm#7184** <@{self.bot.owner_id}>\n\n"
             f"use `{self.bot.command_prefix}help` for the list of commands.\n\n"
             f"Currently following **{followcount}** twitter accounts "
             f"across **{len(self.bot.guilds)}** guilds."
         )
         content.add_field(
-            name="Github", value="https://github.com/joinemm/fansite-bot", inline=False
+            name="Github", value="https://github.com/joinemm/siniara", inline=False
         )
         content.add_field(name="Donate", value="https://www.ko-fi.com/joinemm", inline=False)
         content.set_thumbnail(url=self.bot.user.avatar_url)
@@ -71,7 +70,7 @@ class Commands(commands.Cog):
     async def guilds(self, ctx):
         """Show all connected guilds."""
         content = discord.Embed(
-            title=f"Active on {len(self.bot.guilds)}** guilds",
+            title=f"Active in {len(self.bot.guilds)}** guilds",
             color=self.bot.twitter_blue,
         )
 

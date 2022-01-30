@@ -29,7 +29,7 @@ class Siniara(commands.AutoShardedBot):
     def __init__(self, **kwargs):
         self.config = Config("config.toml")
         super().__init__(
-            command_prefix=self.config.prefix, owner_id=self.config.owner_id, **kwargs
+            command_prefix=self.config.prefix, owner_id=int(self.config.owner_id), **kwargs
         )
         self.logger = logger
         self.start_time = time()
@@ -40,6 +40,7 @@ class Siniara(commands.AutoShardedBot):
             self.cogs_to_load.append("cogs.stats")
 
     async def close(self):
+        self.streamer.disconnect_streamer()
         await self.db.cleanup()
         await super().close()
 
