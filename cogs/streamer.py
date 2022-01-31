@@ -167,7 +167,7 @@ class Streamer(commands.Cog):
                     results.append((shortened_url, str(response.url)))
         return results
 
-    async def send_tweet(self, channel, tweet):
+    async def send_tweet(self, channel, tweet, is_manual=False):
         """Format and send a tweet to given discord channel."""
         media_files = []
         try:
@@ -213,7 +213,9 @@ class Streamer(commands.Cog):
             f"\n:link: <{tweet_link}>"
         )
 
-        if not tweet_config["media_only"] and tweet_text:
+        tweet_text = tweet_text.strip()
+
+        if not tweet_config["media_only"] and tweet_text and not is_manual:
             caption += "\n> " + tweet_text.replace("\n", "\n> ")
 
         files = []
@@ -620,7 +622,7 @@ class Streamer(commands.Cog):
             except Exception:
                 raise exceptions.Warning(f'Could not find tweet "{tweet_url}"')
 
-            await self.send_tweet(ctx.channel, tweet)
+            await self.send_tweet(ctx.channel, tweet, is_manual=True)
 
     @commands.command()
     @commands.is_owner()
