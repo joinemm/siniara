@@ -21,7 +21,7 @@ class Config:
             self.owner_id = self.quit_on_empty(self.json["owner_id"])
             self.prefix = self.quit_on_empty(self.json["prefix"])
             self.discord_token = self.quit_on_empty(self.json["keys"]["discord_token"])
-            self.statcord_token = self.json["keys"].get("discord_token")
+            self.statcord_token = self.json["keys"].get("statcord_token")
             self.twitter_consumer_key = self.quit_on_empty(
                 self.json["keys"]["twitter"]["consumer_key"]
             )
