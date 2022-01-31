@@ -164,7 +164,7 @@ class Streamer(commands.Cog):
         async with aiohttp.ClientSession() as session:
             for shortened_url in urls:
                 async with session.get(shortened_url) as response:
-                    results.append((shortened_url, response.url))
+                    results.append((shortened_url, str(response.url)))
         return results
 
     async def send_tweet(self, channel, tweet):
@@ -196,24 +196,28 @@ class Streamer(commands.Cog):
             return
 
         timestamp = arrow.get(tweet.created_at)
-        parts = tweet.full_text.rsplit(" ", 1)
-        if len(parts) > 1:
-            tweet_text, tweet_link = parts
-        else:
-            tweet_text = ""
-            tweet_link = parts[0]
+        tweet_text = tweet.full_text
+        tweet_link = f"https://twitter.com/i/status/{tweet.id}"
+
+        links = re.findall(r"https?://\S+", tweet.full_text)
+        if media_files:
+            tweet_text = tweet_text.replace(links.pop(), "")
+        if links:
+            resolved = await self.resolve_shortened_urls(links)
+            for short_link, full_link in resolved:
+                tweet_text = tweet_text.replace(short_link, full_link)
 
         caption = (
             f"<:twitter:937425165241946162> **@{tweet.user.screen_name}**"
             f" <t:{int(timestamp.timestamp())}>"
-            f" \n:link: <{tweet_link}>"
+            f"\n:link: <{tweet_link}>"
         )
 
         if not tweet_config["media_only"] and tweet_text:
             caption += "\n> " + tweet_text.replace("\n", "\n> ")
 
+        files = []
         if media_files:
-            files = []
             # download file and rename, upload to discord
             async with aiohttp.ClientSession() as session:
                 for n, (media_type, media_url) in enumerate(media_files, start=1):
