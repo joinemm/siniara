@@ -63,7 +63,11 @@ class Streamer(commands.Cog):
             activity=discord.Activity(name=f"{len(set(follows))} accounts", type=3)
         )
 
-    def rule_builder(self, users: list[str]) -> list[StreamRule]:
+    @staticmethod
+    def rule_builder(users: list[str]) -> list[StreamRule]:
+        if len(users) == 0:
+            return []
+
         suffix = " -is:retweet"
         rules = []
         rule_value = "from:" + str(users[0])
@@ -74,6 +78,8 @@ class Streamer(commands.Cog):
             else:
                 rules.append(rule_value + suffix)
                 rule_value = "from:" + str(user)
+        if rule_value:
+            rules.append(rule_value + suffix)
 
         return [StreamRule(value) for value in rules]
 
@@ -103,8 +109,10 @@ class Streamer(commands.Cog):
         logger.info("Starting streamer refresh loop")
 
     async def replace_rules(self, current_rules: list[StreamRule], new_rules: list[StreamRule]):
+        logger.info(current_rules)
         if current_rules:
             await self.stream.delete_rules([r.id for r in current_rules])
+        logger.info(new_rules)
         if new_rules:
             await self.stream.add_rules(new_rules)
             logger.info(f"Added new ruleset {new_rules}")
@@ -112,10 +120,10 @@ class Streamer(commands.Cog):
     async def check_for_filter_changes(self):
         current_rules = await self.stream.get_rules()
         current_rules = current_rules.data or []
-        followed_users = set(await queries.get_all_users(self.bot.db))
+        followed_users = await queries.get_all_users(self.bot.db)
         current_users = self.deconstruct_rules(current_rules)
-        if followed_users != set(current_users):
-            new_rules = self.rule_builder(list(followed_users))
+        if set(followed_users) != set(current_users):
+            new_rules = self.rule_builder(followed_users)
             await self.replace_rules(current_rules, new_rules)
             await self.bot.change_presence(
                 activity=discord.Activity(name=f"{len(followed_users)} accounts", type=3)
