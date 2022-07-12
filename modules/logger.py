@@ -1,22 +1,20 @@
 import logging
-import coloredlogs
 
 
-def get_logger(name):
-    logger = logging.getLogger(name)
+def get_logger(logger_name):
+    logger = logging.getLogger(logger_name)
     if logger.handlers:
         return logger
 
-    fh = logging.FileHandler(".error.log")
-    fh.setLevel(logging.ERROR)
-    logger.addHandler(fh)
-
     # logger not created yet, assign options
-    coloredlogs.install(
-        fmt="[{asctime}.{msecs:03.0f}] {message}",
+    logger.setLevel(level=logging.INFO)
+    fmt = logging.Formatter(
+        fmt="{asctime} | {levelname:7} {name:>17} > {message}",
         style="{",
-        level="DEBUG",
-        logger=logger,
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
+    handler = logging.StreamHandler()
+    handler.setFormatter(fmt)
+    logger.addHandler(handler)
 
     return logger

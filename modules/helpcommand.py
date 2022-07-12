@@ -3,20 +3,16 @@ from discord.ext import commands
 
 
 class EmbedHelpCommand(commands.HelpCommand):
-    """HelpCommand that utilizes embeds.
-    It's pretty basic but it lacks some nuances that people might expect.
-    1. It breaks if you have more than 25 cogs or more than 25 subcommands.
-    2. It doesn't DM users. To do this, you have to override `get_destination`. It's simple.
-    """
+    """HelpCommand that utilizes embeds."""
 
     # Set the embed colour here
     COLOUR = int("1da1f2", 16)
 
     def get_ending_note(self):
-        return f"Use {self.clean_prefix}{self.invoked_with} [command | category] for more info"
+        return f"Use {self.context.clean_prefix}{self.invoked_with} [command | category] for more info"
 
     def get_command_signature(self, command):
-        return f"{self.clean_prefix}{command.qualified_name} {command.signature}"
+        return f"{self.context.clean_prefix}{command.qualified_name} {command.signature}"
 
     def add_aliases_if_needed(self, embed, mapping):
         if mapping.aliases:
@@ -38,7 +34,7 @@ class EmbedHelpCommand(commands.HelpCommand):
 
             filtered = await self.filter_commands(bot_commands, sort=True)
             if filtered:
-                value = "\n".join(f"`{self.clean_prefix}{c.name}`" for c in bot_commands)
+                value = "\n".join(f"`{self.context.clean_prefix}{c.name}`" for c in bot_commands)
                 if cog and cog.description:
                     value = f"{cog.description}\n{value}"
 
@@ -90,7 +86,7 @@ class EmbedHelpCommand(commands.HelpCommand):
         if command.brief:
             embed.description += command.brief
         if command.help:
-            embed.description += f" ```{command.help.format(prefix=self.clean_prefix)}```"
+            embed.description += f" ```{command.help.format(prefix=self.context.clean_prefix)}```"
 
         await self.get_destination().send(embed=embed)
 

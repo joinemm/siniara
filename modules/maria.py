@@ -1,24 +1,17 @@
-# Project: Fansite Bot
-# File: maria.py
-# Author: Joinemm
-# Date created: 18/6/21
-# Python Version: 3.9
-
 import asyncio
 
 import aiomysql
 
-from modules import exceptions, logger as log
+from modules import exceptions
+from modules import logger as log
 
 logger = log.get_logger(__name__)
-log.get_logger("aiomysql")
 
 
 class MariaDB:
     def __init__(self, bot):
         self.bot = bot
         self.pool = None
-        bot.loop.create_task(self.initialize_pool())
 
     async def wait_for_pool(self):
         i = 0
@@ -36,7 +29,8 @@ class MariaDB:
         while self.pool is None:
             try:
                 self.pool = await aiomysql.create_pool(
-                    **self.bot.config.dbcredentials, maxsize=10, autocommit=True
+                    **self.bot.config.dbcredentials,
+                    autocommit=True,
                 )
             except Exception as e:
                 logger.error(e)

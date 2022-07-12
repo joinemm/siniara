@@ -8,6 +8,18 @@ async def get_filter(db):
     return [str(x[0]) for x in data]
 
 
+async def get_all_users(db):
+    data = await db.execute(
+        """
+        SELECT DISTINCT username
+            FROM follow
+            JOIN twitter_user
+            ON twitter_user_id=user_id
+    """
+    )
+    return [x[0] for x in data]
+
+
 async def get_channels(db, twitter_user_id):
     data = await db.execute(
         "SELECT DISTINCT channel_id FROM follow WHERE twitter_user_id = %s", twitter_user_id

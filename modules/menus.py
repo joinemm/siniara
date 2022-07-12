@@ -1,8 +1,9 @@
 import discord
 from discord.ext import menus
+from discord.ext.menus.views import ViewMenuPages
 
 
-class Menu(menus.MenuPages):
+class Menu(ViewMenuPages):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -17,7 +18,7 @@ class ListMenu(menus.ListPageSource):
         super().__init__(data, per_page=per_page)
 
         if self.is_paginating():
-            if self.embed.footer.text != discord.Embed.Empty:
+            if self.embed.footer.text is not None:
                 self.og_footer = " | " + self.embed.footer.text
             else:
                 self.og_footer = ""

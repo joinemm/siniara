@@ -1,0 +1,287 @@
+import re
+
+import arrow
+import discord
+from discord.ext import commands
+from tweepy.asynchronous import AsyncClient
+
+from modules import exceptions, menus, queries
+from modules.siniara import Siniara
+from modules.twitter_renderer import TwitterRenderer
+
+
+class Twitter(commands.Cog):
+    def __init__(self, bot):
+        self.bot: Siniara = bot
+        self.twitter_renderer = TwitterRenderer(self.bot)
+
+    async def cog_load(self):
+        self.api = AsyncClient(
+            bearer_token=self.bot.config.twitter_bearer_token,
+            wait_on_rate_limit=True,
+        )
+
+    async def follow(self, channel, user_id, username, timestamp):
+        await self.bot.db.execute(
+            """
+            INSERT INTO twitter_user VALUES (%s, %s)
+            ON DUPLICATE KEY UPDATE username = %s
+            """,
+            user_id,
+            username,
+            username,
+        )
+        await self.bot.db.execute(
+            "INSERT INTO follow VALUES (%s, %s, %s, %s)",
+            channel.id,
+            channel.guild.id,
+            user_id,
+            timestamp,
+        )
+
+    async def unfollow(self, channel_id, user_id):
+        await self.bot.db.execute(
+            "DELETE FROM follow WHERE twitter_user_id = %s AND channel_id = %s",
+            user_id,
+            channel_id,
+        )
+
+    @commands.command()
+    @commands.has_permissions(manage_guild=True)
+    async def add(self, ctx, channel: discord.TextChannel, *usernames):
+        """Add users to the follow list."""
+        if not usernames:
+            raise exceptions.Info("You must give at least one twitter user to follow!")
+
+        rows = []
+        time_now = arrow.now().datetime
+        current_users = await self.bot.db.execute(
+            "SELECT twitter_user_id FROM follow WHERE channel_id = %s", channel.id
+        )
+        guild_follow_current, guild_follow_limit = await queries.get_follow_limit(
+            self.bot.db, channel.guild.id
+        )
+        successes = 0
+        for username in usernames:
+            status = None
+            try:
+                user = (await self.api.get_user(username=username)).data
+            except Exception as e:
+                status = f":x: Error {e}"
+            else:
+                if (user.id,) in current_users:
+                    status = ":x: User already being followed on this channel"
+                else:
+                    if guild_follow_current >= guild_follow_limit:
+                        status = f":lock: Guild follow count limit reached ({guild_follow_limit})"
+                    else:
+                        await self.follow(channel, user.id, user.username, time_now)
+                        status = ":white_check_mark: Success"
+                        successes += 1
+                        guild_follow_current += 1
+
+            rows.append(f"**@{user.username}** {status}")
+
+        content = discord.Embed(
+            title=f":notepad_spiral: Added {successes}/{len(usernames)} users to {channel.name}",
+            color=self.bot.twitter_blue,
+        )
+        content.set_footer(text="Changes will take effect within a minute")
+        pages = menus.Menu(source=menus.ListMenu(rows, embed=content), clear_reactions_after=True)
+        await pages.start(ctx)
+
+    @commands.command(name="del", aliases=["delete", "remove"])
+    @commands.has_permissions(manage_guild=True)
+    async def remove(self, ctx, channel: discord.TextChannel, *usernames):
+        """Remove users from the follow list."""
+        if not usernames:
+            raise exceptions.Info("You must give at least one twitter user to remove!")
+
+        rows = []
+        current_users = await self.bot.db.execute(
+            "SELECT twitter_user_id FROM follow WHERE channel_id = %s", channel.id
+        )
+        successes = 0
+        for username in usernames:
+            status = None
+            try:
+                user_id = (await self.api.get_user(username=username)).data.id
+            except Exception as e:
+                # user not found, maybe changed username
+                # try finding username from cache
+                user_id = await self.bot.db.execute(
+                    "SELECT user_id FROM twitter_user WHERE username = %s", username
+                )
+                if user_id:
+                    user_id = user_id[0][0]
+                else:
+                    status = f":x: Error {e.args[0][0]['code']}: {e.args[0][0]['message']}"
+
+            if status is None:
+                if (user_id,) not in current_users:
+                    status = ":x: User is not being followed on this channel"
+                else:
+                    await self.unfollow(channel.id, user_id)
+                    status = ":white_check_mark: Success"
+                    successes += 1
+
+            rows.append(f"**@{username}** {status}")
+
+        content = discord.Embed(
+            title=f":notepad_spiral: Removed {successes}/{len(usernames)} users from {channel.name}",
+            color=self.bot.twitter_blue,
+        )
+        content.set_footer(text="Changes will take effect within a minute")
+        pages = menus.Menu(source=menus.ListMenu(rows, embed=content), clear_reactions_after=True)
+        await pages.start(ctx)
+
+    @commands.command(name="list", aliases=["follows"])
+    async def followslist(self, ctx, channel: discord.TextChannel = None):
+        """List all followed accounts on server or channel"""
+        data = await self.bot.db.execute(
+            """
+            SELECT twitter_user.username, channel_id, added_on
+            FROM follow LEFT JOIN twitter_user
+            ON twitter_user.user_id = follow.twitter_user_id
+            """
+            + (f" AND channel_id = {channel.id}" if channel is not None else "")
+            + " ORDER BY channel_id, added_on DESC",
+            # ctx.guild.id,
+        )
+        content = discord.Embed(title="Followed twitter users", color=self.bot.twitter_blue)
+        rows = []
+        for username, channel_id, added_on in data:
+            rows.append(
+                (f"<#{channel_id}> < " if channel is None else "")
+                + f"**@{username}** (since {added_on} UTC)"
+            )
+
+        if not rows:
+            rows.append("Nothing yet :(")
+
+        pages = menus.Menu(source=menus.ListMenu(rows, embed=content), clear_reactions_after=True)
+        await pages.start(ctx)
+
+    @commands.group()
+    @commands.has_permissions(manage_guild=True)
+    async def mediaonly(self, ctx):
+        """
+        Ignore tweets without any media in them.
+
+        Config hierarchy is as follows:
+            1. User settings overwrite everything else.
+            2. Channel settings overwrite guild settings.
+            2. Guild settings overwrite default settings.
+            3. If nothing is set, default option is post everything.
+        """
+        if ctx.invoked_subcommand is None:
+            await ctx.send_help(ctx.command)
+
+    @mediaonly.command(name="guild")
+    async def mediaonly_guild(self, ctx, value: bool):
+        """Guild level setting."""
+        await queries.set_config_guild(self.bot.db, ctx.guild.id, "media_only", value)
+        await ctx.send(f":white_check_mark: Guild setting **Media only** is now **{value}**")
+
+    @mediaonly.command(name="channel")
+    async def mediaonly_channel(self, ctx, channel: discord.TextChannel, value: bool):
+        """Channel level setting."""
+        await queries.set_config_channel(self.bot.db, channel, "media_only", value)
+        await ctx.send(
+            f":white_check_mark: Channel setting **Media only** is now **{value}** in {channel.mention}"
+        )
+
+    @mediaonly.command(name="user")
+    async def mediaonly_user(self, ctx, username, value: bool):
+        """User level setting."""
+        user_id = await self.bot.db.execute(
+            """
+            SELECT twitter_user.user_id
+            FROM follow RIGHT JOIN twitter_user
+            ON twitter_user.user_id = follow.twitter_user_id
+            WHERE twitter_user.username = %s AND guild_id = %s""",
+            username,
+            ctx.guild.id,
+            one_value=True,
+        )
+        if not user_id:
+            raise exceptions.Info(f'No channel on this server is following "@{username}"')
+
+        await queries.set_config_user(self.bot.db, ctx.guild.id, user_id, "media_only", value)
+        await ctx.send(
+            f":white_check_mark: User setting **Media only** is now **{value}** for **@{username}**"
+        )
+
+    @mediaonly.command(name="clear")
+    async def mediaonly_clear(self, ctx):
+        """Clear all current config."""
+        await queries.clear_config(self.bot.db, ctx.guild)
+        await ctx.send(":white_check_mark: Settings cleared")
+
+    @mediaonly.command(name="current")
+    async def mediaonly_current(self, ctx):
+        """Show the current configuration."""
+        channel_settings = await self.bot.db.execute(
+            "SELECT channel_id, media_only FROM channel_settings WHERE guild_id = %s",
+            ctx.guild.id,
+        )
+        guild_setting = await self.bot.db.execute(
+            "SELECT media_only FROM guild_settings WHERE guild_id = %s",
+            ctx.guild.id,
+            one_value=True,
+        )
+        user_settings = await self.bot.db.execute(
+            """
+            SELECT twitter_user.username, media_only
+            FROM user_settings RIGHT OUTER JOIN twitter_user
+            ON twitter_user.user_id = user_settings.twitter_user_id
+            WHERE guild_id = %s
+            """,
+            ctx.guild.id,
+        )
+
+        content = discord.Embed(title="Current configuration", color=self.bot.twitter_blue)
+        content.add_field(
+            name="Guild setting",
+            value=f"Media only {':white_check_mark:' if guild_setting else ':x:'}",
+        )
+        if channel_settings:
+            content.add_field(
+                name="Channel settings",
+                value="\n".join(
+                    f"<#{cid}> Media only {':white_check_mark:' if val else ':x:'}"
+                    for cid, val in channel_settings
+                ),
+            )
+        if user_settings:
+            content.add_field(
+                name="User settings",
+                value="\n".join(
+                    f"**@{uname}** Media only {':white_check_mark:' if val else ':x:'}"
+                    for uname, val in user_settings
+                ),
+            )
+        await ctx.send(embed=content)
+
+    @commands.command()
+    async def get(self, ctx, *links):
+        """Manually get tweets."""
+        if len(links) > 10:
+            raise exceptions.CommandWarning("Only 10 links at a time please!")
+
+        for tweet_url in links:
+            if "status" in tweet_url:
+                tweet_id = re.search(r"status/(\d+)", tweet_url).group(1)
+            else:
+                tweet_id = tweet_url
+
+            await self.twitter_renderer.send_tweet(int(tweet_id), channels=[ctx.channel])
+
+        try:
+            await ctx.message.edit(suppress=True)
+        except (discord.Forbidden, discord.NotFound):
+            pass
+
+
+async def setup(bot: Siniara):
+    await bot.add_cog(Twitter(bot))

@@ -1,12 +1,15 @@
-import discord
 import traceback
+
+import discord
 from discord.ext import commands
+
 from modules import exceptions
+from modules.siniara import Siniara
 
 
 class ErrorHandler(commands.Cog):
     def __init__(self, bot):
-        self.bot = bot
+        self.bot: Siniara = bot
         self.message_levels = {
             "info": {
                 "description_prefix": ":information_source:",
@@ -107,5 +110,5 @@ class ErrorHandler(commands.Cog):
         await self.send(ctx, "error", f"{type(error).__name__}: {error}")
 
 
-def setup(bot):
-    bot.add_cog(ErrorHandler(bot))
+async def setup(bot):
+    await bot.add_cog(ErrorHandler(bot))

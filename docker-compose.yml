@@ -9,24 +9,23 @@ services:
       - database:/var/lib/mysql
       - ./sql:/docker-entrypoint-initdb.d:ro
     environment:
+      - MARIADB_ROOT_PASSWORD=secure-af
       - MARIADB_USER=bot
       - MARIADB_PASSWORD=botpw
       - MARIADB_DATABASE=siniara
-    networks:
-      - botnet
 
   bot:
     container_name: siniara-bot
     build: .
     command: python main.py
     restart: unless-stopped
+    environment:
+      - DB_HOST=db
     depends_on:
       - db
-    networks:
-      - botnet
 
 networks:
-  botnet:
+  default:
     driver: bridge
 
 volumes:

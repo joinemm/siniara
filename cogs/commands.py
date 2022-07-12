@@ -1,23 +1,27 @@
-import discord
-from discord.ext import commands
-from modules import logger as log, menus, database_actions as queries
-import psutil
-import os
 import math
 import time
+
+import discord
+import psutil
+from discord.ext import commands
+
+from modules import logger as log
+from modules import menus, queries
+from modules.siniara import Siniara
 
 logger = log.get_logger(__name__)
 
 
 class Commands(commands.Cog):
     def __init__(self, bot):
-        self.bot = bot
+        self.bot: Siniara = bot
 
     @commands.command()
-    async def info(self, ctx):
+    async def info(self, ctx: commands.Context):
         """Get information about the bot."""
-        followcount = len(await queries.get_filter(self.bot.db))
-        content = discord.Embed(title="Siniara v5.1", colour=self.bot.twitter_blue)
+        userlist = await queries.get_all_users(self.bot.db)
+        followcount = len(set(userlist))
+        content = discord.Embed(title="Siniara v6", colour=self.bot.twitter_blue)
         content.description = (
             f"Bot for fetching new media content from twitter, "
             f"created by **Joinemm#7184** <@{self.bot.owner_id}>\n\n"
@@ -25,52 +29,48 @@ class Commands(commands.Cog):
             f"Currently following **{followcount}** twitter accounts "
             f"across **{len(self.bot.guilds)}** guilds."
         )
-        content.add_field(
-            name="Github", value="https://github.com/joinemm/siniara", inline=False
-        )
+        content.add_field(name="Github", value="https://github.com/joinemm/siniara", inline=False)
         content.add_field(name="Donate", value="https://www.ko-fi.com/joinemm", inline=False)
-        content.set_thumbnail(url=self.bot.user.avatar_url)
+        content.set_thumbnail(url=self.bot.user.display_avatar.url)
         await ctx.send(embed=content)
 
     @commands.command(alises=["uptime"])
-    async def system(self, ctx):
+    async def system(self, ctx: commands.Context):
         """Get the status of the bot's server."""
-        up_time = time.time() - self.bot.start_time
-        uptime_string = stringfromtime(up_time, 2)
-        stime = time.time() - psutil.boot_time()
-        system_uptime_string = stringfromtime(stime, 2)
-        mem = psutil.virtual_memory()
-        pid = os.getpid()
-        memory_use = psutil.Process(pid).memory_info()[0]
+        uptime = time.time() - self.bot.start_time
+        memory_use = psutil.Process().memory_info()[0]
 
         content = discord.Embed(title="System status", color=self.bot.twitter_blue)
-        content.add_field(name="Bot uptime", value=uptime_string)
-        content.add_field(name="System uptime", value=system_uptime_string)
+        content.add_field(name="Bot uptime", value=stringfromtime(uptime, 2))
         content.add_field(name="Bot memory usage", value=f"{memory_use / math.pow(1024, 2):.2f}MB")
-        content.add_field(name="System memory Usage", value=f"{mem.percent}%")
-        content.add_field(name="System CPU Usage", value=f"{psutil.cpu_percent()}%")
         content.add_field(name="Discord API latency", value=f"{self.bot.latency * 1000:.1f}ms")
 
         await ctx.send(embed=content)
 
     @commands.command()
-    async def ping(self, ctx):
+    async def ping(self, ctx: commands.Context):
         """Get the bot's ping."""
         pong_msg = await ctx.send(":ping_pong:")
-        sr_lat = (pong_msg.created_at - ctx.message.created_at).total_seconds() * 1000
+        sr_lat = int((pong_msg.created_at - ctx.message.created_at).total_seconds() * 1000)
         content = discord.Embed(color=self.bot.twitter_blue)
         content.add_field(
-            name=":heartbeat: Heartbeat", value=f"`{self.bot.latency * 1000:.1f}`ms", inline=False
+            name=":heartbeat: Heartbeat",
+            value=f"`{int(self.bot.latency * 1000)}`ms",
+            inline=False,
         )
-        content.add_field(name=":handshake: ACK", value=f"`{sr_lat}`ms", inline=False)
+        content.add_field(
+            name=":handshake: ACK",
+            value=f"`{sr_lat}`ms",
+            inline=False,
+        )
         await pong_msg.edit(content=None, embed=content)
 
     @commands.command()
     @commands.is_owner()
-    async def guilds(self, ctx):
+    async def guilds(self, ctx: commands.Context):
         """Show all connected guilds."""
         content = discord.Embed(
-            title=f"Active in {len(self.bot.guilds)}** guilds",
+            title=f"Active in {len(self.bot.guilds)} guilds",
             color=self.bot.twitter_blue,
         )
 
@@ -87,7 +87,7 @@ class Commands(commands.Cog):
 
     @commands.command(hidden=True)
     @commands.is_owner()
-    async def leaveguild(self, ctx, guild_id: int):
+    async def leaveguild(self, ctx: commands.Context, guild_id: int):
         """Leave a guild."""
         guild = self.bot.get_guild(guild_id)
         await guild.leave()
@@ -95,14 +95,14 @@ class Commands(commands.Cog):
 
     @commands.command(name="db", aliases=["dbe", "dbq"])
     @commands.is_owner()
-    async def database_query(self, ctx, *, statement):
+    async def database_query(self, ctx: commands.Context, *, statement: str):
         """Execute something against the local MariaDB instance."""
         data = await self.bot.db.execute(statement)
         await ctx.send(f"```py\n{data}\n```")
 
     @commands.command()
     @commands.is_owner()
-    async def unlock(self, ctx, guild: discord.Guild = None):
+    async def unlock(self, ctx: commands.Context, guild: discord.Guild = None):
         """Unlock the followed users limit for given guild."""
         if guild is None:
             guild = ctx.guild
@@ -111,11 +111,11 @@ class Commands(commands.Cog):
         await ctx.send(f":unlock: Account limit unlocked in **{guild.name}**")
 
 
-def setup(bot):
-    bot.add_cog(Commands(bot))
+async def setup(bot: Siniara):
+    await bot.add_cog(Commands(bot))
 
 
-def stringfromtime(t, accuracy=4):
+def stringfromtime(t: int, accuracy: int = 4) -> str:
     """
     :param t : Time in seconds
     :returns : Formatted string
