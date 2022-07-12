@@ -15,5 +15,5 @@ Media options are configurable per server/channel/user, and non-media tweets can
 You can run your own instance of the bot very easily by using the included `docker-compose.yml` configuration.
 
 1.  Clone this repository.
-2.  Rename `.env.example` to `.env` and fill in your tokens.
+2.  Rename `.env.example` to `.env` and fill in your keys. You need a Twitter API v2 bearer token.
 3.  `$ docker-compose up`
