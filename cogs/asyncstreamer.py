@@ -35,7 +35,6 @@ class RunForeverClient(AsyncStreamingClient):
     async def send_to_channels(self, tweet: Tweet):
         logger.info(tweet)
         channels = await queries.get_channels(self.bot.db, tweet.author_id)
-        logger.info(f"sending to {channels}")
         await self.twitter_renderer.send_tweet(
             tweet.id,
             [self.bot.get_channel(c) for c in channels],
@@ -109,10 +108,8 @@ class Streamer(commands.Cog):
         logger.info("Starting streamer refresh loop")
 
     async def replace_rules(self, current_rules: list[StreamRule], new_rules: list[StreamRule]):
-        logger.info(current_rules)
         if current_rules:
             await self.stream.delete_rules([r.id for r in current_rules])
-        logger.info(new_rules)
         if new_rules:
             await self.stream.add_rules(new_rules)
             logger.info(f"Added new ruleset {new_rules}")
