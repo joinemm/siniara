@@ -57,11 +57,6 @@ class Streamer(commands.Cog):
         self.stream.run_forever()
         self.refresh_loop.start()
 
-        follows = await queries.get_all_users(self.bot.db)
-        await self.bot.change_presence(
-            activity=discord.Activity(name=f"{len(set(follows))} accounts", type=3)
-        )
-
     @staticmethod
     def rule_builder(users: list[str]) -> list[StreamRule]:
         if len(users) == 0:
@@ -122,9 +117,10 @@ class Streamer(commands.Cog):
         if set(followed_users) != set(current_users):
             new_rules = self.rule_builder(followed_users)
             await self.replace_rules(current_rules, new_rules)
-            await self.bot.change_presence(
-                activity=discord.Activity(name=f"{len(followed_users)} accounts", type=3)
-            )
+
+        await self.bot.change_presence(
+            activity=discord.Activity(name=f"{len(followed_users)} accounts", type=3)
+        )
 
 
 async def setup(bot: Siniara):
