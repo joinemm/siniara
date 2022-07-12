@@ -23,7 +23,7 @@ class RunForeverClient(AsyncStreamingClient):
     def run_forever(self) -> asyncio.Task:
         async def task():
             while True:
-                await self.filter()
+                await self.filter(tweet_fields=["author_id"])
                 if sys.exc_info()[0] == KeyboardInterrupt:
                     break
 
@@ -33,12 +33,17 @@ class RunForeverClient(AsyncStreamingClient):
         asyncio.ensure_future(self.send_to_channels(tweet))
 
     async def send_to_channels(self, tweet: Tweet):
-        logger.info(tweet)
-        channels = await queries.get_channels(self.bot.db, tweet.author_id)
-        await self.twitter_renderer.send_tweet(
-            tweet.id,
-            [self.bot.get_channel(c) for c in channels],
-        )
+        channel_ids = await queries.get_channels(self.bot.db, tweet.author_id)
+        if not channel_ids:
+            logger.warning(f"No channel ids found for user id {tweet.author_id} {tweet}")
+            return
+
+        channels = [self.bot.get_channel(c) for c in channel_ids]
+        if not channels:
+            logger.warning(f"Could not find channel ids within bot context for tweet {tweet}")
+            return
+
+        await self.twitter_renderer.send_tweet(tweet.id, channels)
 
 
 class Streamer(commands.Cog):
