@@ -16,7 +16,7 @@ CREATE TABLE follow (
     twitter_user_id BIGINT,
     added_on DATETIME,
     PRIMARY KEY (channel_id, twitter_user_id),
-    FOREIGN KEY (twitter_user_id) REFERENCES twitter_user (user_id)
+    FOREIGN KEY (twitter_user_id) REFERENCES twitter_user (user_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 CREATE TABLE guild_settings (
@@ -37,5 +37,5 @@ CREATE TABLE user_settings (
     twitter_user_id BIGINT,
     media_only BOOL,
     PRIMARY KEY (guild_id, twitter_user_id),
-    FOREIGN KEY (twitter_user_id) REFERENCES twitter_user (user_id)
+    FOREIGN KEY (twitter_user_id) REFERENCES twitter_user (user_id) ON DELETE CASCADE ON UPDATE CASCADE
 );

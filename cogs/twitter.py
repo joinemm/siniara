@@ -1,3 +1,4 @@
+from dataclasses import is_dataclass
 import re
 
 import arrow
@@ -281,6 +282,82 @@ class Twitter(commands.Cog):
             await ctx.message.edit(suppress=True)
         except (discord.Forbidden, discord.NotFound):
             pass
+
+    @commands.command()
+    @commands.is_owner()
+    async def purge(self, ctx: commands.Context):
+        """Remove all follows from unavailable guilds and channels."""
+        data = await self.bot.db.execute(
+            """
+            SELECT channel_id, guild_id, twitter_user_id, username
+            FROM follow
+            JOIN twitter_user
+            ON twitter_user_id=user_id
+            """
+        )
+        actions = []
+        guilds_to_delete = []
+        channels_to_delete = []
+        users_to_delete = []
+        twitter_usernames = {}
+        usernames_to_change = []
+        for channel_id, guild_id, twitter_uid, username in data:
+            if self.bot.get_guild(guild_id) is None:
+                actions.append(f"Could not find guild with id: [{guild_id}]")
+                guilds_to_delete.append(guild_id)
+            elif self.bot.get_channel(channel_id) is None:
+                actions.append(f"Could not find channel with id: [{channel_id}]")
+                channels_to_delete.append(channel_id)
+            else:
+                twitter_usernames[twitter_uid] = username
+
+        uids = list(twitter_usernames.keys())
+        for uids_chunk in [uids[i : i + 100] for i in range(0, len(uids), 100)]:
+            userdata = await self.api.get_users(ids=uids_chunk)
+            if userdata.errors:
+                for error in userdata.errors:
+                    actions.append(error["detail"])
+                    users_to_delete.append(int(error["value"]))
+            if userdata.data:
+                for user in userdata.data:
+                    if twitter_usernames[user.id] != user.username:
+                        actions.append(
+                            f"User has changed username from @{twitter_usernames[user.id]} to @{user.username}"
+                        )
+                        usernames_to_change.append((user.id, user.username))
+
+        if not actions:
+            return await ctx.send("There is nothing to do.")
+
+        content = discord.Embed(
+            title="Purge results",
+            color=self.bot.twitter_blue,
+        )
+        pages = menus.Menu(
+            source=menus.ListMenu(actions, embed=content),
+            clear_reactions_after=True,
+        )
+        await pages.start(ctx)
+        confirm = await menus.Confirm("Run actions?").prompt(ctx)
+        if confirm:
+            await ctx.send("Running purge...")
+            if guilds_to_delete:
+                await self.bot.db.execute(
+                    "DELETE FROM follow WHERE guild_id IN %s", guilds_to_delete
+                )
+            if channels_to_delete:
+                await self.bot.db.execute(
+                    "DELETE FROM follow WHERE channel_id IN %s", channels_to_delete
+                )
+            if users_to_delete:
+                await self.bot.db.execute(
+                    "DELETE FROM twitter_user WHERE user_id IN %s", users_to_delete
+                )
+            for uid, new_name in usernames_to_change:
+                await self.bot.db.execute(
+                    "UPDATE twitter_user SET username = %s WHERE user_id = %s", new_name, uid
+                )
+            await ctx.send("Purge complete!")
 
 
 async def setup(bot: Siniara):
