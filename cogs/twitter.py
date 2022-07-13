@@ -142,11 +142,11 @@ class Twitter(commands.Cog):
             """
             SELECT twitter_user.username, channel_id, added_on
             FROM follow LEFT JOIN twitter_user
-            ON twitter_user.user_id = follow.twitter_user_id
+            ON twitter_user.user_id = follow.twitter_user_id WHERE follow.guild_id = %s
             """
             + (f" AND channel_id = {channel.id}" if channel is not None else "")
             + " ORDER BY channel_id, added_on DESC",
-            # ctx.guild.id,
+            ctx.guild.id,
         )
         content = discord.Embed(title="Followed twitter users", color=self.bot.twitter_blue)
         rows = []

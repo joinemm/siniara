@@ -30,7 +30,7 @@ class TwitterRenderer:
 
         caption = (
             f"<:twitter:937425165241946162> **@{screen_name}**"
-            f" <t:{int(timestamp.timestamp())}>"
+            f" <t:{int(timestamp.timestamp())}:R>"
         )
 
         files_per_max_size = {}
@@ -58,10 +58,13 @@ class TwitterRenderer:
             # try to send the best version in each guild without unnecessary downloading
             max_filesize = getattr(channel.guild, "filesize_limit", 8388608)
             if files_per_max_size.get(max_filesize):
-                files, too_big_files = files_per_max_size.get(max_filesize)
+                files, too_big_files = files_per_max_size[max_filesize]
             else:
                 files, too_big_files = await self.extract_files(tweet, max_filesize)
                 files_per_max_size[max_filesize] = (files, too_big_files)
+
+            if not files and not too_big_files and tweet_config["media_only"]:
+                return
 
             caption += "\n" + "\n".join(too_big_files)
             await channel.send(caption, files=files, embed=content)
@@ -101,8 +104,6 @@ class TwitterRenderer:
     async def extract_files(
         self, tweet: dict, max_filesize: int
     ) -> tuple[list[discord.File], list[str]]:
-        timestamp = arrow.get(tweet["created_at"])
-        screen_name = tweet["user"]["screen_name"]
         media_urls = []
         files = []
         too_big_files = []
@@ -119,6 +120,8 @@ class TwitterRenderer:
             media_urls.append(("jpg", base + "?format=" + extension + "&name=orig"))
 
         for n, (extension, media_url) in enumerate(media_urls, start=1):
+            timestamp = arrow.get(tweet["created_at"])
+            screen_name = tweet["user"]["screen_name"]
             filename = (
                 f"{timestamp.format('YYMMDD')}-@{screen_name}-{tweet['id_str']}-{n}.{extension}"
             )
