@@ -1,5 +1,6 @@
+import discord
 from discord.ext import menus
-from discord.ext.menus.views import ViewMenuPages, ViewMenu
+from discord.ext.menus.views import ViewMenu, ViewMenuPages
 
 
 class Menu(ViewMenuPages):

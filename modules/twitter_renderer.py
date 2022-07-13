@@ -26,7 +26,10 @@ class TwitterRenderer:
         tweet = await self.tweet_cdn_data(tweet_id)
         timestamp = arrow.get(tweet["created_at"])
         screen_name = tweet["user"]["screen_name"]
-        tweet_link = f"https://twitter.com/{screen_name}/status/{tweet['id_str']}"
+        tweet_link = f"https://twitter.com/{screen_name}/status/{tweet_id}"
+
+        if int(tweet["id_str"]) != tweet_id:
+            logger.warning(f"Got id {tweet['id_str']}, Possible retweet {tweet_link}")
 
         caption = (
             f"<:twitter:937425165241946162> **@{screen_name}**"

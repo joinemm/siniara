@@ -67,18 +67,18 @@ class Streamer(commands.Cog):
         if len(users) == 0:
             return []
 
-        suffix = " -is:retweet"
+        suffix = "-is:retweet"
         rules = []
         rule_value = "from:" + str(users[0])
         for user in users[1:]:
             addition = " OR from:" + str(user)
-            if len(rule_value + addition + suffix) <= 512:
+            if len(rule_value + addition + suffix) <= 510:
                 rule_value += addition
             else:
-                rules.append(rule_value + suffix)
+                rules.append(f"({rule_value}) {suffix}")
                 rule_value = "from:" + str(user)
         if rule_value:
-            rules.append(rule_value + suffix)
+            rules.append(f"({rule_value}) {suffix}")
 
         return [StreamRule(value) for value in rules]
 
@@ -86,7 +86,7 @@ class Streamer(commands.Cog):
         suffix = " -is:retweet"
         usernames = []
         for rule in rules:
-            value = rule.value.removesuffix(suffix)
+            value = rule.value.removesuffix(suffix).strip("()")
             usernames += [x.split(":")[1] for x in value.split(" OR ")]
         return usernames
 
