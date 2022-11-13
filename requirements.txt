@@ -30,8 +30,6 @@ braceexpand==0.1.7
     # via jishaku
 brotli==1.0.9
     # via discord-py
-cchardet==2.1.7
-    # via discord-py
 certifi==2022.6.15
     # via requests
 cffi==1.15.1
@@ -44,14 +42,8 @@ click==8.1.3
     # via
     #   black
     #   jishaku
-discord-ext-menus @ git+https://github.com/joinemm/discord-ext-menus.git
-    # via -r requirements.in
-discord-ext-menus-views @ git+https://github.com/oliver-ni/discord-ext-menus-views
-    # via -r requirements.in
 discord.py @ git+https://github.com/Rapptz/discord.py.git
-    # via
-    #   -r requirements.in
-    #   discord-ext-menus
+    # via -r requirements.in
 flake8==4.0.1
     # via -r requirements.in
 frozenlist==1.3.0
@@ -65,6 +57,8 @@ idna==3.3
 import-expression==1.1.4
     # via jishaku
 jishaku==2.5.0
+    # via -r requirements.in
+loguru==0.6.0
     # via -r requirements.in
 mccabe==0.6.1
     # via flake8

@@ -1,6 +1,4 @@
-import modules.logger as log
-
-logger = log.get_logger(__name__)
+from loguru import logger
 
 
 async def get_filter(db):
@@ -54,6 +52,26 @@ async def get_follow_limit(db, guild_id):
     return current, limit[0]
 
 
+async def add_rule(db, guild_id, rule_type, constraint, value):
+    if rule_type == "channel":
+        table = "channel_rule"
+        column = "channel_id"
+    elif rule_type == "user":
+        table = "user_rule"
+        column = "twitter_user_id"
+
+    await db.execute(
+        f"""INSERT INTO {table} (guild_id, {column}, media_only)
+            VALUES (%s, %s, %s)
+        ON DUPLICATE KEY UPDATE media_only = %s
+        """,
+        guild_id,
+        constraint,
+        value,
+        value,
+    )
+
+
 async def set_config_guild(db, guild_id, setting, value):
     # just in case, dont allow anything else inside the sql string
     if setting not in ["media_only"]:
@@ -104,7 +122,7 @@ async def set_config_user(db, guild_id, user_id, setting, value):
 
 async def tweet_config(db, channel, user_id):
     channel_setting = await db.execute(
-        "SELECT media_only FROM channel_settings WHERE channel_id = %s",
+        "SELECT media_only FROM channel_rule WHERE channel_id = %s",
         channel.id,
         one_value=True,
     )
@@ -114,7 +132,7 @@ async def tweet_config(db, channel, user_id):
         one_value=True,
     )
     user_setting = await db.execute(
-        "SELECT media_only FROM user_settings WHERE twitter_user_id = %s AND guild_id = %s",
+        "SELECT media_only FROM user_rule WHERE twitter_user_id = %s AND guild_id = %s",
         user_id,
         channel.guild.id,
         one_value=True,

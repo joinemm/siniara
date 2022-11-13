@@ -25,17 +25,21 @@ CREATE TABLE guild_settings (
     PRIMARY KEY (guild_id)
 );
 
-CREATE TABLE channel_settings (
-    channel_id BIGINT,
+CREATE TABLE channel_rule (
+    rule_id INT NOT NULL AUTO_INCREMENT,
     guild_id BIGINT NOT NULL,
+    channel_id BIGINT,
     media_only BOOL,
-    PRIMARY KEY (channel_id)
+    PRIMARY KEY (rule_id),
+    UNIQUE (channel_id)
 );
 
-CREATE TABLE user_settings (
+CREATE TABLE user_rule (
+    rule_id INT NOT NULL AUTO_INCREMENT,
     guild_id BIGINT,
     twitter_user_id BIGINT,
     media_only BOOL,
-    PRIMARY KEY (guild_id, twitter_user_id),
+    PRIMARY KEY (rule_id),
+    UNIQUE (guild_id, twitter_user_id),
     FOREIGN KEY (twitter_user_id) REFERENCES twitter_user (user_id) ON DELETE CASCADE ON UPDATE CASCADE
 );

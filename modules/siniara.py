@@ -3,33 +3,44 @@ from time import time
 
 import aiohttp
 import discord
+from discord import Interaction
+from discord.app_commands import CommandTree
 from discord.ext import commands
+from tweepy.asynchronous import AsyncClient
 
-from modules import helpcommand
-from modules import logger as log
 from modules import maria
 from modules.config import Config
+
+from loguru import logger
+
+
+class MyTree(CommandTree):
+    async def interaction_check(self, interaction: Interaction) -> bool:
+        """Runs before any slash command"""
+        arguments = [f"{name}: {value}" for name, value in interaction.namespace]
+        logger.info(
+            f"{interaction.user}: /{interaction.command.qualified_name} {' '.join(arguments)}"
+        )
+        return True
 
 
 class Siniara(commands.AutoShardedBot):
     def __init__(self, **kwargs):
         self.config = Config()
-        intents = discord.Intents.none()
+        intents = discord.Intents.default()
         intents.guilds = True
-        intents.messages = True
         intents.reactions = True
         intents.message_content = True
         super().__init__(
-            help_command=helpcommand.EmbedHelpCommand(),
             case_insensitive=True,
-            command_prefix=self.config.prefix,
+            command_prefix=commands.when_mentioned_or(self.config.prefix),
             owner_id=int(self.config.owner_id),
             intents=intents,
             description="Bot for following twitter users on discord",
             allowed_mentions=discord.AllowedMentions(everyone=False),
+            tree_cls=MyTree,
             **kwargs,
         )
-        self.logger = log.get_logger("Siniara")
         self.start_time = time()
         self.twitter_blue = int("1da1f2", 16)
         self.db = maria.MariaDB(self)
@@ -38,6 +49,7 @@ class Siniara(commands.AutoShardedBot):
             "cogs.errorhandler",
             "cogs.asyncstreamer",
             "cogs.twitter",
+            "jishaku",
         ]
 
     async def close(self):
@@ -46,21 +58,25 @@ class Siniara(commands.AutoShardedBot):
         await super().close()
 
     async def on_ready(self):
-        self.logger.info(f"Logged in as {self.user}")
+        logger.info(f"Logged in as {self.user}")
 
     async def setup_hook(self):
         self.session = aiohttp.ClientSession()
+        self.tweepy = AsyncClient(
+            bearer_token=self.config.twitter_bearer_token,
+            wait_on_rate_limit=True,
+        )
         self.before_invoke(self.before_any_command)
         await self.db.initialize_pool()
         for extension in self.cogs_to_load:
             try:
                 await self.load_extension(extension)
-                self.logger.info(f"Imported {extension}")
+                logger.info(f"Imported {extension}")
             except Exception as error:
-                self.logger.error(f"Error loading {extension} , aborting")
+                logger.error(f"Error loading {extension} , aborting")
                 traceback.print_exception(type(error), error, error.__traceback__)
                 quit()
-        self.logger.info("All extensions loaded successfully")
+        logger.info("All extensions loaded successfully")
 
     @staticmethod
     async def before_any_command(ctx):
@@ -75,6 +91,6 @@ class Siniara(commands.AutoShardedBot):
         # prevent double invocation for subcommands
         if ctx.invoked_subcommand is None:
             took = time() - ctx.time
-            self.logger.info(
+            logger.info(
                 f"({took:.2f}s) {ctx.author.name}@[{ctx.guild.name}] used {ctx.message.content}"
             )

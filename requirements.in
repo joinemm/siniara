@@ -1,6 +1,4 @@
 discord.py[speed] @ git+https://github.com/Rapptz/discord.py.git
-discord-ext-menus @ git+https://github.com/joinemm/discord-ext-menus.git
-discord-ext-menus-views @ git+https://github.com/oliver-ni/discord-ext-menus-views
 python-dotenv
 aiomysql
 arrow
@@ -10,3 +8,4 @@ tweepy[async]
 uvloop
 black
 flake8
+loguru

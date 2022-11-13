@@ -1,23 +1,23 @@
 import math
 import time
+import typing
 
 import discord
 import psutil
+from discord import app_commands
 from discord.ext import commands
 
-from modules import logger as log
-from modules import menus, queries
+from modules import queries
 from modules.siniara import Siniara
-
-logger = log.get_logger(__name__)
+from modules.ui import RowPaginator
 
 
 class Commands(commands.Cog):
     def __init__(self, bot):
         self.bot: Siniara = bot
 
-    @commands.command()
-    async def info(self, ctx: commands.Context):
+    @app_commands.command()
+    async def info(self, interaction: discord.Interaction):
         """Get information about the bot."""
         userlist = await queries.get_all_users(self.bot.db)
         followcount = len(set(userlist))
@@ -25,47 +25,28 @@ class Commands(commands.Cog):
         content.description = (
             f"Bot for fetching new media content from twitter, "
             f"created by **Joinemm#7184** <@{self.bot.owner_id}>\n\n"
-            f"use `{self.bot.command_prefix}help` for the list of commands.\n\n"
             f"Currently following **{followcount}** twitter accounts "
             f"across **{len(self.bot.guilds)}** guilds."
         )
         content.add_field(name="Github", value="https://github.com/joinemm/siniara", inline=False)
         content.add_field(name="Donate", value="https://www.ko-fi.com/joinemm", inline=False)
-        content.set_thumbnail(url=self.bot.user.display_avatar.url)
-        await ctx.send(embed=content)
 
-    @commands.command(alises=["uptime"])
-    async def system(self, ctx: commands.Context):
-        """Get the status of the bot's server."""
         uptime = time.time() - self.bot.start_time
         memory_use = psutil.Process().memory_info()[0]
 
-        content = discord.Embed(title="System status", color=self.bot.twitter_blue)
         content.add_field(name="Bot uptime", value=stringfromtime(uptime, 2))
         content.add_field(name="Bot memory usage", value=f"{memory_use / math.pow(1024, 2):.2f}MB")
         content.add_field(name="Discord API latency", value=f"{self.bot.latency * 1000:.1f}ms")
+        content.set_thumbnail(url=self.bot.user.display_avatar.url)
 
-        await ctx.send(embed=content)
+        await interaction.response.send_message(embed=content)
 
-    @commands.command()
-    async def ping(self, ctx: commands.Context):
+    @app_commands.command()
+    async def ping(self, interaction: discord.Interaction):
         """Get the bot's ping."""
-        pong_msg = await ctx.send(":ping_pong:")
-        sr_lat = int((pong_msg.created_at - ctx.message.created_at).total_seconds() * 1000)
-        content = discord.Embed(color=self.bot.twitter_blue)
-        content.add_field(
-            name=":heartbeat: Heartbeat",
-            value=f"`{int(self.bot.latency * 1000)}`ms",
-            inline=False,
-        )
-        content.add_field(
-            name=":handshake: ACK",
-            value=f"`{sr_lat}`ms",
-            inline=False,
-        )
-        await pong_msg.edit(content=None, embed=content)
+        await interaction.response.send_message(f":ping_pong: `{int(self.bot.latency * 1000)}` ms")
 
-    @commands.command()
+    @commands.command(hidden=True)
     @commands.is_owner()
     async def guilds(self, ctx: commands.Context):
         """Show all connected guilds."""
@@ -82,8 +63,7 @@ class Commands(commands.Cog):
                 f"`#{i:2}`[`{guild.id}`] **{guild.member_count}** members : **{guild.name}**"
             )
 
-        pages = menus.Menu(source=menus.ListMenu(rows, embed=content), clear_reactions_after=True)
-        await pages.start(ctx)
+        await RowPaginator(content, rows).run(ctx)
 
     @commands.command(hidden=True)
     @commands.is_owner()
@@ -109,6 +89,52 @@ class Commands(commands.Cog):
 
         await queries.unlock_guild(self.bot.db, guild.id)
         await ctx.send(f":unlock: Account limit unlocked in **{guild.name}**")
+
+    @commands.command()
+    @commands.guild_only()
+    async def sync(
+        self,
+        ctx: commands.Context,
+        guilds: commands.Greedy[discord.Object],
+        spec: typing.Optional[typing.Literal["~", "*", "^"]] = None,
+    ) -> None:
+        """
+        Syncs app commands
+
+        $sync -> global sync
+        $sync ~ -> sync current guild
+        $sync * -> copies all global app commands to current guild and syncs
+        $sync ^ -> clears all commands from the current guild target and syncs (removes guild commands)
+        $sync id_1 id_2 -> syncs guilds with id 1 and 2
+        """
+        if not guilds:
+            if spec == "~":
+                synced = await ctx.bot.tree.sync(guild=ctx.guild)
+            elif spec == "*":
+                ctx.bot.tree.copy_global_to(guild=ctx.guild)
+                synced = await ctx.bot.tree.sync(guild=ctx.guild)
+            elif spec == "^":
+                ctx.bot.tree.clear_commands(guild=ctx.guild)
+                await ctx.bot.tree.sync(guild=ctx.guild)
+                synced = []
+            else:
+                synced = await ctx.bot.tree.sync()
+
+            await ctx.send(
+                f"Synced {len(synced)} commands {'globally' if spec is None else 'to the current guild.'}"
+            )
+            return
+
+        ret = 0
+        for guild in guilds:
+            try:
+                await ctx.bot.tree.sync(guild=guild)
+            except discord.HTTPException:
+                pass
+            else:
+                ret += 1
+
+        await ctx.send(f"Synced the tree to {ret}/{len(guilds)}.")
 
 
 async def setup(bot: Siniara):

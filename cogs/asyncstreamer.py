@@ -1,17 +1,14 @@
 import asyncio
 import sys
-
 import discord
 from discord.ext import commands, tasks
 from tweepy import StreamRule, Tweet
 from tweepy.asynchronous import AsyncClient, AsyncStreamingClient
 
-from modules import logger as log
 from modules import queries
 from modules.siniara import Siniara
-from modules.twitter_renderer import TwitterRenderer
-
-logger = log.get_logger(__name__)
+from modules.twitter import TwitterRenderer
+from loguru import logger
 
 
 class RunForeverClient(AsyncStreamingClient):
@@ -38,15 +35,21 @@ class RunForeverClient(AsyncStreamingClient):
             logger.warning(f"No channel ids found for user id {tweet.author_id} {tweet}")
             return
 
-        channels = [self.bot.get_channel(c) for c in channel_ids]
-        if not channels:
-            logger.warning(f"Could not find channel ids within bot context for tweet {tweet}")
-            return
+        channels = []
+        for channel_id in channel_ids:
+            channel = self.bot.get_channel(channel_id)
+            if channel:
+                channels.append(channel)
+            else:
+                logger.warning(f"Could not find channel with id {channel_id} for tweet {tweet}")
 
-        await self.twitter_renderer.send_tweet(tweet.id, channels)
+        if channels:
+            await self.twitter_renderer.send_tweet(tweet.id, channels)
 
 
 class Streamer(commands.Cog):
+    NO_RETWEETS = " -is:retweet"
+
     def __init__(self, bot):
         self.bot: Siniara = bot
 
@@ -62,31 +65,28 @@ class Streamer(commands.Cog):
         self.stream.run_forever()
         self.refresh_loop.start()
 
-    @staticmethod
-    def rule_builder(users: list[str]) -> list[StreamRule]:
+    def rule_builder(self, users: list[str]) -> list[StreamRule]:
         if len(users) == 0:
             return []
 
-        suffix = "-is:retweet"
         rules = []
         rule_value = "from:" + str(users[0])
         for user in users[1:]:
             addition = " OR from:" + str(user)
-            if len(rule_value + addition + suffix) <= 510:
+            if len(rule_value + addition + self.NO_RETWEETS) <= 510:
                 rule_value += addition
             else:
-                rules.append(f"({rule_value}) {suffix}")
+                rules.append(f"({rule_value}) {self.NO_RETWEETS}")
                 rule_value = "from:" + str(user)
         if rule_value:
-            rules.append(f"({rule_value}) {suffix}")
+            rules.append(f"({rule_value}) {self.NO_RETWEETS}")
 
         return [StreamRule(value) for value in rules]
 
     def deconstruct_rules(self, rules: list[StreamRule]) -> list[str]:
-        suffix = " -is:retweet"
         usernames = []
         for rule in rules:
-            value = rule.value.removesuffix(suffix).strip("()")
+            value = rule.value.removesuffix(self.NO_RETWEETS).strip("()")
             usernames += [x.split(":")[1] for x in value.split(" OR ")]
         return usernames
 
@@ -111,7 +111,9 @@ class Streamer(commands.Cog):
         if current_rules:
             await self.stream.delete_rules([r.id for r in current_rules])
         if new_rules:
-            await self.stream.add_rules(new_rules)
+            response = await self.stream.add_rules(new_rules)
+            if response.errors:
+                logger.error(response.errors)
             logger.info(f"Added new ruleset {new_rules}")
 
     async def check_for_filter_changes(self):

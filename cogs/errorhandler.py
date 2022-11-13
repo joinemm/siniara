@@ -1,10 +1,12 @@
 import traceback
 
 import discord
+from discord import app_commands
 from discord.ext import commands
 
-from modules import exceptions
 from modules.siniara import Siniara
+
+from loguru import logger
 
 
 class ErrorHandler(commands.Cog):
@@ -28,6 +30,20 @@ class ErrorHandler(commands.Cog):
             },
         }
 
+        # setting the handler
+        self.bot.tree.on_error = self.on_app_command_error
+
+    # the error handler
+    async def on_app_command_error(
+        self, interaction: discord.Interaction, error: app_commands.AppCommandError
+    ):
+        exc = "".join(traceback.format_exception(type(error), error, error.__traceback__))
+        logger.error(exc)
+        if interaction.response.is_done():
+            await interaction.followup.send(str(error))
+        else:
+            await interaction.response.send_message(str(error))
+
     async def send(self, ctx, level, message, help_footer=None):
         """Send error message to chat."""
         settings = self.message_levels.get(level)
@@ -42,7 +58,7 @@ class ErrorHandler(commands.Cog):
         try:
             await ctx.send(embed=embed)
         except discord.errors.Forbidden:
-            self.bot.logger.error("Forbidden when trying to send error message embed")
+            logger.error("Forbidden when trying to send error message embed")
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx, error):
@@ -58,12 +74,6 @@ class ErrorHandler(commands.Cog):
         if isinstance(error, ignored):
             return
 
-        elif isinstance(error, exceptions.Info):
-            await self.send(ctx, "info", str(error))
-
-        elif isinstance(error, exceptions.Warning):
-            await self.send(ctx, "warning", str(error))
-
         elif isinstance(error, commands.NotOwner):
             await self.send(ctx, "info", "Only my creator can use this command!")
 
@@ -76,9 +86,6 @@ class ErrorHandler(commands.Cog):
                 )
             except discord.HTTPException:
                 pass
-
-        elif isinstance(error, exceptions.SubcommandNotFound):
-            await self.send(ctx, "warning", f'Invalid subcommand "{ctx.subcommand_passed}"')
 
         elif isinstance(error, commands.MissingRequiredArgument):
             await self.send(
@@ -104,9 +111,9 @@ class ErrorHandler(commands.Cog):
             await self.log_and_traceback(ctx, error)
 
     async def log_and_traceback(self, ctx, error):
-        self.bot.logger.error(f'Unhandled exception in command "{ctx.message.content}":')
+        logger.error(f'Unhandled exception in command "{ctx.message.content}":')
         exc = "".join(traceback.format_exception(type(error), error, error.__traceback__))
-        self.bot.logger.error(exc)
+        logger.error(exc)
         await self.send(ctx, "error", f"{type(error).__name__}: {error}")
 
 
