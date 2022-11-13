@@ -76,10 +76,10 @@ class Streamer(commands.Cog):
             if len(rule_value + addition + self.NO_RETWEETS) <= 510:
                 rule_value += addition
             else:
-                rules.append(f"({rule_value}) {self.NO_RETWEETS}")
+                rules.append(f"({rule_value}){self.NO_RETWEETS}")
                 rule_value = "from:" + str(user)
         if rule_value:
-            rules.append(f"({rule_value}) {self.NO_RETWEETS}")
+            rules.append(f"({rule_value}){self.NO_RETWEETS}")
 
         return [StreamRule(value) for value in rules]
 
