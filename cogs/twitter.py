@@ -8,7 +8,7 @@ from discord.ext import commands
 
 from modules import queries
 from modules.siniara import Siniara
-from modules.twitter import NoMedia, TwitterRenderer
+from modules.twitter import NoMedia, SendableChannel, TwitterRenderer
 from modules.ui import Confirm, RowPaginator, SettingsMenu, followup_or_send
 
 
@@ -232,7 +232,7 @@ class Twitter(commands.Cog):
                 tweet_ids.append(int(tweet))
             except ValueError:
                 try:
-                    tweet_ids.append(int(re.search(r"status/(\d+)", tweet).group(1)))
+                    tweet_ids.append(int(re.search(r"status/(\d+)", tweet).group(1)))  # type: ignore
                 except AttributeError:
                     await interaction.response.send_message(
                         f":x: Invalid tweet: {tweet}", ephemeral=True
@@ -243,15 +243,17 @@ class Twitter(commands.Cog):
         await interaction.response.defer()
         for tweet_id in tweet_ids:
             try:
-                if channel is None:
+                if channel is None and isinstance(interaction.channel, SendableChannel):
                     await self.twitter_renderer.send_tweet(
                         tweet_id, [interaction.channel], interaction=interaction
                     )
-                else:
+                elif channel:
                     await self.twitter_renderer.send_tweet(
                         tweet_id, [channel], interaction=interaction
                     )
                     results.append(f":white_check_mark: `{tweet_id}` -> {channel.mention}")
+                else:
+                    raise ValueError("No channel to send to")
             except NoMedia:
                 if channel is None:
                     await followup_or_send(
@@ -297,14 +299,15 @@ class Twitter(commands.Cog):
                 twitter_usernames[twitter_uid] = username
 
         uids = list(twitter_usernames.keys())
+
         for uids_chunk in [uids[i : i + 100] for i in range(0, len(uids), 100)]:
             userdata = await self.bot.tweepy.get_users(ids=uids_chunk)
-            if userdata.errors:
-                for error in userdata.errors:
+            if userdata.errors:  # type: ignore
+                for error in userdata.errors:  # type: ignore
                     actions.append(error["detail"])
                     users_to_delete.append(int(error["value"]))
-            if userdata.data:
-                for user in userdata.data:
+            if userdata.data:  # type: ignore
+                for user in userdata.data:  # type: ignore
                     if twitter_usernames[user.id] != user.username:
                         actions.append(
                             f"User has changed username from @{twitter_usernames[user.id]} to @{user.username}"

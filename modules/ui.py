@@ -245,7 +245,7 @@ class SettingsMenu(discord.ui.View):
             one_value=True,
         )
         value = 1 if guild_setting else 0
-        self.server_wide_toggle.value = value
+        self.server_wide_toggle.value = value  # type: ignore
         self.server_wide_toggle.emoji = ON_OFF[value]
         await interaction.response.send_message(embed=self.embed, view=self)
 
@@ -319,7 +319,7 @@ class UserRules(SubMenu):
         if not self.options:
             self.remove_rule.disabled = True
 
-        content.description += "\n\n> Use `/rule user` to add rules."
+        content.description += "\n\n> Use `/rule user` to add rules."  # type: ignore
         return content
 
     @discord.ui.button(label="Remove rule")
@@ -351,7 +351,7 @@ class ChannelRules(SubMenu):
         if not self.options:
             self.remove_rule.disabled = True
 
-        content.description += "\n\n> Use `/rule channel` to add rules."
+        content.description += "\n\n> Use `/rule channel` to add rules."  # type: ignore
         return content
 
     @discord.ui.button(label="Remove rule")
@@ -377,13 +377,13 @@ async def respond_or_send(interaction: discord.Interaction, condition=None, **kw
     if condition is None:
         condition = interaction.response.is_done()
     if condition:
-        await interaction.channel.send(**kwargs)
+        await interaction.channel.send(**kwargs)  # type: ignore
     else:
         await interaction.response.send_message(**kwargs)
 
 
 async def followup_or_send(interaction: discord.Interaction, send_if, **kwargs):
     if send_if:
-        await interaction.channel.send(**kwargs)
+        await interaction.channel.send(**kwargs)  # type: ignore
     else:
         await interaction.followup.send(**kwargs)

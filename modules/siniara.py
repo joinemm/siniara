@@ -17,10 +17,11 @@ from loguru import logger
 class MyTree(CommandTree):
     async def interaction_check(self, interaction: Interaction) -> bool:
         """Runs before any slash command"""
-        arguments = [f"{name}: {value}" for name, value in interaction.namespace]
-        logger.info(
-            f"{interaction.user}: /{interaction.command.qualified_name} {' '.join(arguments)}"
-        )
+        if interaction.command:
+            arguments = [f"{name}: {value}" for name, value in interaction.namespace]
+            logger.info(
+                f"{interaction.user}: /{interaction.command.qualified_name} {' '.join(arguments)}"
+            )
         return True
 
 

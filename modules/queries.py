@@ -59,6 +59,8 @@ async def add_rule(db, guild_id, rule_type, constraint, value):
     elif rule_type == "user":
         table = "user_rule"
         column = "twitter_user_id"
+    else:
+        raise ValueError
 
     await db.execute(
         f"""INSERT INTO {table} (guild_id, {column}, media_only)

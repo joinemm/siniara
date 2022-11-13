@@ -1,7 +1,7 @@
 import asyncio
 from dataclasses import dataclass
 import io
-from typing import Optional
+from typing import Optional, Union
 
 import arrow
 import tweepy
@@ -13,6 +13,13 @@ from modules.siniara import Siniara
 from modules.ui import LinkButton
 
 from loguru import logger
+
+SendableChannel = Union[
+    discord.VoiceChannel,
+    discord.TextChannel,
+    discord.Thread,
+    discord.PartialMessageable,
+]
 
 
 class NoMedia(AppCommandError):
@@ -44,7 +51,7 @@ class TwitterRenderer:
             user_fields=["profile_image_url"],
         )
 
-        tweet: tweepy.Tweet = response.data
+        tweet: tweepy.Tweet = response.data  # type: ignore
 
         # logger.info(tweet.data)
         # logger.info(response.includes)
@@ -90,8 +97,8 @@ class TwitterRenderer:
     async def send_tweet(
         self,
         tweet_id: int,
-        channels: list[discord.TextChannel],
-        interaction: discord.Interaction = None,
+        channels: list[SendableChannel],
+        interaction: Optional[discord.Interaction] = None,
     ) -> None:
         """Format and send a tweet to given discord channels"""
         logger.info(f"sending {tweet_id} into {', '.join(f'#{c}' for c in channels)}")
@@ -106,16 +113,19 @@ class TwitterRenderer:
         )
 
         for channel in channels:
+            if not channel.guild:
+                continue
+
             tweet_config = await queries.tweet_config(self.bot.db, channel, tweet.author_id)
-            content = discord.Embed(description="", color=int("1ca1f1", 16))
-            if not tweet.parent_id == tweet.id:
-                parent_link = (
-                    f"https://twitter.com/{tweet.parent_screen_name}/status/{tweet.parent_id}"
-                )
-                content.description += f"> [*replying to*]({parent_link})\n"
+            content = discord.Embed(color=int("1ca1f1", 16))
+            description = ""
+            if tweet.reply_to:
+                description += f"> [*replying to*]({tweet.reply_to})\n"
 
             if not tweet_config["media_only"] and tweet.text:
-                content.description += tweet.text + "\n"
+                description += tweet.text + "\n"
+
+            content.description = description
 
             # discord normally has 8MB file size limit, but it can be increased in some guilds
             max_filesize = channel.guild.filesize_limit
@@ -146,7 +156,7 @@ class TwitterRenderer:
                 await channel.send(
                     caption,
                     files=files,
-                    embed=content if content.description else None,
+                    embed=content if content.description else discord.utils.MISSING,
                     view=button,
                 )
 

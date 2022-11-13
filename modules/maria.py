@@ -1,4 +1,5 @@
 import asyncio
+from typing import Optional
 import aiomysql
 
 from loguru import logger
@@ -7,7 +8,7 @@ from loguru import logger
 class MariaDB:
     def __init__(self, bot):
         self.bot = bot
-        self.pool = None
+        self.pool: Optional[aiomysql.Pool] = None
 
     async def wait_for_pool(self):
         i = 0
@@ -34,12 +35,13 @@ class MariaDB:
         logger.info("Initialized MariaDB connection pool")
 
     async def cleanup(self):
-        self.pool.close()
-        await self.pool.wait_closed()
+        if self.pool:
+            self.pool.close()
+            await self.pool.wait_closed()
         logger.info("Closed MariaDB connection pool")
 
     async def execute(self, statement, *params, one_row=False, one_value=False, as_list=False):
-        if await self.wait_for_pool():
+        if await self.wait_for_pool() and self.pool:
             async with self.pool.acquire() as conn:
                 async with conn.cursor() as cur:
                     await cur.execute(statement, params)
@@ -58,7 +60,7 @@ class MariaDB:
         raise Exception("Could not connect to the local MariaDB instance!")
 
     async def executemany(self, statement, params):
-        if await self.wait_for_pool():
+        if await self.wait_for_pool() and self.pool:
             async with self.pool.acquire() as conn:
                 async with conn.cursor() as cur:
                     await cur.executemany(statement, params)
