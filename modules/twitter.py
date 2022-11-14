@@ -63,7 +63,7 @@ class TwitterRenderer:
         timestamp = arrow.get(tweet.created_at)
         tweet_text = self.expand_links(tweet.text, tweet.entities["urls"])
         reply_to = None
-        if tweet["conversation_id"] == tweet["id"]:
+        if not tweet["conversation_id"] == tweet["id"]:
             reply_to = f"https://twitter.com/i/status/{tweet['conversation_id']}"
 
         return TweetData(
