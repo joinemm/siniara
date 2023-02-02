@@ -6,7 +6,7 @@ Any media is parsed and downloaded as discord files so it will never disappear i
 
 Media options are configurable per server/channel/user, and non-media tweets can be ignored.
 
-[Invite here!](https://discord.com/api/oauth2/authorize?client_id=523863343585296404&permissions=322624&scope=bot)
+[Invite here!](https://discord.com/api/oauth2/authorize?client_id=523863343585296404&permissions=2147806272&scope=bot%20applications.commands)
 
 * * *
 
