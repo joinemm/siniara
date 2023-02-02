@@ -42,7 +42,7 @@ click==8.1.3
     # via
     #   black
     #   jishaku
-discord.py @ git+https://github.com/Rapptz/discord.py.git
+discord-py[speed]==2.1.0
     # via -r requirements.in
 flake8==4.0.1
     # via -r requirements.in
