@@ -70,8 +70,11 @@ class Commands(commands.Cog):
     async def leaveguild(self, ctx: commands.Context, guild_id: int):
         """Leave a guild."""
         guild = self.bot.get_guild(guild_id)
-        await guild.leave()
-        await ctx.send(f":wave: Left **{guild.name}** [`{guild.id}`]")
+        if guild:
+            await guild.leave()
+            await ctx.send(f":wave: Left **{guild.name}** [`{guild.id}`]")
+        else:
+            await ctx.send("Could not find this guild")
 
     @commands.command(name="db", aliases=["dbe", "dbq"])
     @commands.is_owner()
@@ -82,16 +85,20 @@ class Commands(commands.Cog):
 
     @commands.command()
     @commands.is_owner()
-    async def unlock(self, ctx: commands.Context, guild: discord.Guild = None):
+    async def unlock(self, ctx: commands.Context, guild: typing.Optional[discord.Guild] = None):
         """Unlock the followed users limit for given guild."""
         if guild is None:
             guild = ctx.guild
+
+        if guild is None:
+            return await ctx.send("There was problem getting guild")
 
         await queries.unlock_guild(self.bot.db, guild.id)
         await ctx.send(f":unlock: Account limit unlocked in **{guild.name}**")
 
     @commands.command()
     @commands.guild_only()
+    @commands.is_owner()
     async def sync(
         self,
         ctx: commands.Context,

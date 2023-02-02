@@ -55,13 +55,18 @@ class TwitterRenderer:
 
         # logger.info(tweet.data)
         # logger.info(response.includes)
+        # logger.info(tweet.entities)
 
         media = await self.tweepy_get_media(response)
         user = response.includes["users"][0]  # type: ignore
         screen_name = user.username
         tweet_url = f"https://twitter.com/{screen_name}/status/{tweet.id}"
         timestamp = arrow.get(tweet.created_at)
-        tweet_text = self.expand_links(tweet.text, tweet.entities["urls"])
+        if tweet.entities is not None and tweet.entities.get("urls", False):
+            tweet_text = self.expand_links(tweet.text, tweet.entities["urls"])
+        else:
+            tweet_text = tweet.text
+
         reply_to = None
         if not tweet["conversation_id"] == tweet["id"]:
             reply_to = f"https://twitter.com/i/status/{tweet['conversation_id']}"
@@ -153,12 +158,17 @@ class TwitterRenderer:
                 )
                 interaction.extras["responded_once"] = True
             else:
-                await channel.send(
-                    caption,
-                    files=files,
-                    embed=content if content.description else discord.utils.MISSING,
-                    view=button,
-                )
+                try:
+                    await channel.send(
+                        caption,
+                        files=files,
+                        embed=content if content.description else discord.utils.MISSING,
+                        view=button,
+                    )
+                except discord.Forbidden:
+                    logger.warning(
+                        f"No permissions to send {tweet.id} into #{channel} in {channel.guild}"
+                    )
 
     @staticmethod
     def expand_links(tweet_text: str, urls: list[dict]):

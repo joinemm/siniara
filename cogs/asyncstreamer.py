@@ -64,6 +64,7 @@ class Streamer(commands.Cog):
         )
         self.stream.run_forever()
         self.refresh_loop.start()
+        self.status_loop.start()
 
     def rule_builder(self, users: list[str]) -> list[StreamRule]:
         if len(users) == 0:
@@ -93,6 +94,14 @@ class Streamer(commands.Cog):
     async def cog_unload(self):
         self.stream.disconnect()
 
+    @tasks.loop(minutes=5)
+    async def status_loop(self):
+        followed_users = await queries.get_all_users(self.bot.db)
+        print("following", followed_users)
+        await self.bot.change_presence(
+            activity=discord.Activity(name=f"{len(followed_users)} accounts", type=3)
+        )
+
     @tasks.loop(minutes=1)
     async def refresh_loop(self):
         try:
@@ -103,31 +112,27 @@ class Streamer(commands.Cog):
             raise e
 
     @refresh_loop.before_loop
+    @status_loop.before_loop
     async def before_refresh_loop(self):
         await self.bot.wait_until_ready()
-        logger.info("Starting streamer refresh loop")
 
     async def replace_rules(self, current_rules: list[StreamRule], new_rules: list[StreamRule]):
         if current_rules:
             await self.stream.delete_rules([r.id for r in current_rules])
         if new_rules:
             response = await self.stream.add_rules(new_rules)
-            if response.errors:
-                logger.error(response.errors)
+            if response.errors:  # type: ignore
+                logger.error(response.errors)  # type: ignore
             logger.info(f"Added new ruleset {new_rules}")
 
     async def check_for_filter_changes(self):
         current_rules = await self.stream.get_rules()
-        current_rules = current_rules.data or []
+        current_rules = current_rules.data or []  # type: ignore
         followed_users = await queries.get_all_users(self.bot.db)
         current_users = self.deconstruct_rules(current_rules)
         if set(followed_users) != set(current_users):
             new_rules = self.rule_builder(followed_users)
             await self.replace_rules(current_rules, new_rules)
-
-        await self.bot.change_presence(
-            activity=discord.Activity(name=f"{len(followed_users)} accounts", type=3)
-        )
 
 
 async def setup(bot: Siniara):

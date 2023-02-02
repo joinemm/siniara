@@ -46,7 +46,7 @@ class ErrorHandler(commands.Cog):
 
     async def send(self, ctx, level, message, help_footer=None):
         """Send error message to chat."""
-        settings = self.message_levels.get(level)
+        settings = self.message_levels[level]
         embed = discord.Embed(
             color=settings["color"], description=f"{settings['description_prefix']} `{message}`"
         )
