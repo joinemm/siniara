@@ -6,7 +6,7 @@ async def get_filter(db):
     return [str(x[0]) for x in data]
 
 
-async def get_all_users(db):
+async def get_all_users(db) -> list[str]:
     data = await db.execute(
         """
         SELECT DISTINCT username
@@ -18,7 +18,7 @@ async def get_all_users(db):
     return [x[0] for x in data]
 
 
-async def get_channels(db, twitter_user_id):
+async def get_channels(db, twitter_user_id) -> list[int]:
     data = await db.execute(
         "SELECT DISTINCT channel_id FROM follow WHERE twitter_user_id = %s", twitter_user_id
     )
@@ -33,7 +33,7 @@ async def unlock_guild(db, guild_id):
     )
 
 
-async def get_follow_limit(db, guild_id):
+async def get_follow_limit(db, guild_id) -> tuple[int, int]:
     await db.execute(
         "INSERT INTO guild VALUES (%s, %s) ON DUPLICATE KEY UPDATE guild_id = guild_id",
         guild_id,

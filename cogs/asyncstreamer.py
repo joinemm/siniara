@@ -13,7 +13,7 @@ from loguru import logger
 
 class RunForeverClient(AsyncStreamingClient):
     def __init__(self, bot, **kwargs):
-        self.bot: Siniara = bot
+        self.bot: "Siniara" = bot
         self.twitter_renderer = TwitterRenderer(self.bot)
         super().__init__(**kwargs)
 
@@ -51,7 +51,7 @@ class Streamer(commands.Cog):
     NO_RETWEETS = " -is:retweet"
 
     def __init__(self, bot):
-        self.bot: Siniara = bot
+        self.bot: "Siniara" = bot
 
     async def cog_load(self):
         self.api = AsyncClient(

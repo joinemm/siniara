@@ -52,6 +52,8 @@ class Siniara(commands.AutoShardedBot):
             "cogs.twitter",
             "jishaku",
         ]
+        # the user will never be none so don't ruin my type checking please
+        self.user: discord.ClientUser
 
     async def close(self):
         await self.session.close()

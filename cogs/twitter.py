@@ -51,7 +51,6 @@ class Twitter(commands.Cog):
         usernames: str,
     ):
         """Add users to the follow list."""
-        usernames = usernames.split()
         rows = []
         time_now = arrow.now().datetime
         current_users = await self.bot.db.execute(
@@ -61,10 +60,12 @@ class Twitter(commands.Cog):
             self.bot.db, channel.guild.id
         )
         successes = 0
-        for username in usernames:
+        for username in usernames.split():
             status = None
+            user = None
             try:
-                user = (await self.bot.tweepy.get_user(username=username)).data
+                twitter_user = await self.bot.tweepy.get_user(username=username)
+                user = twitter_user.data  # type: ignore
             except Exception as e:
                 status = f":x: Error {e}"
             else:
@@ -79,7 +80,7 @@ class Twitter(commands.Cog):
                         successes += 1
                         guild_follow_current += 1
 
-            rows.append(f"**@{user.username}** {status}")
+            rows.append(f"**@{user.username if user else username}** {status}")
 
         content = discord.Embed(
             title=f":notepad_spiral: Added {successes}/{len(usernames)} users to {channel.name}",
@@ -97,16 +98,16 @@ class Twitter(commands.Cog):
         usernames: str,
     ):
         """Remove users from the follow list."""
-        usernames = usernames.split()
         rows = []
         current_users = await self.bot.db.execute(
             "SELECT twitter_user_id FROM follow WHERE channel_id = %s", channel.id
         )
         successes = 0
-        for username in usernames:
+        for username in usernames.split():
             status = None
             try:
-                user_id = (await self.bot.tweepy.get_user(username=username)).data.id
+                twitter_user = await self.bot.tweepy.get_user(username=username)
+                user_id = twitter_user.data.id  # type: ignore
             except Exception as e:
                 # user not found, maybe changed username
                 # try finding username from cache
@@ -218,7 +219,7 @@ class Twitter(commands.Cog):
         channel: typing.Optional[discord.TextChannel] = None,
     ) -> None:
         """Manually get one or more tweets"""
-        if channel:
+        if channel and isinstance(interaction.user, discord.Member):
             perms = channel.permissions_for(interaction.user)
             if not perms.send_messages or not perms.embed_links:
                 await interaction.response.send_message(

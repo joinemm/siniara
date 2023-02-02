@@ -34,7 +34,7 @@ class Commands(commands.Cog):
         uptime = time.time() - self.bot.start_time
         memory_use = psutil.Process().memory_info()[0]
 
-        content.add_field(name="Bot uptime", value=stringfromtime(uptime, 2))
+        content.add_field(name="Bot uptime", value=stringfromtime(int(uptime), 2))
         content.add_field(name="Bot memory usage", value=f"{memory_use / math.pow(1024, 2):.2f}MB")
         content.add_field(name="Discord API latency", value=f"{self.bot.latency * 1000:.1f}ms")
         content.set_thumbnail(url=self.bot.user.display_avatar.url)
@@ -57,7 +57,7 @@ class Commands(commands.Cog):
 
         rows = []
         for i, guild in enumerate(
-            sorted(self.bot.guilds, key=lambda x: x.member_count, reverse=True), start=1
+            sorted(self.bot.guilds, key=lambda x: x.member_count or 0, reverse=True), start=1
         ):
             rows.append(
                 f"`#{i:2}`[`{guild.id}`] **{guild.member_count}** members : **{guild.name}**"
