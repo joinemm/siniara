@@ -97,7 +97,6 @@ class Streamer(commands.Cog):
     @tasks.loop(minutes=5)
     async def status_loop(self):
         followed_users = await queries.get_all_users(self.bot.db)
-        print("following", followed_users)
         await self.bot.change_presence(
             activity=discord.Activity(name=f"{len(followed_users)} accounts", type=3)
         )

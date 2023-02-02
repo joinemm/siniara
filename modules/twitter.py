@@ -22,7 +22,7 @@ SendableChannel = Union[
 ]
 
 
-class NoMedia(AppCommandError):
+class NoMedia(AppCommandError, Exception):
     pass
 
 
