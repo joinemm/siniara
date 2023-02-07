@@ -222,11 +222,20 @@ class SettingsMenu(discord.ui.View):
         self.embed = discord.Embed(title="Send only tweets with media?")
 
     @discord.ui.button(label="Server wide")
-    async def server_wide_toggle(self, interaction, button):
+    async def media_only_guild(self, interaction, button):
         button.value = (button.value + 1) % 2
         button.emoji = ON_OFF[button.value]
         await queries.set_config_guild(
             self.bot.db, interaction.guild_id, "media_only", button.value
+        )
+        await interaction.response.edit_message(view=self)
+
+    @discord.ui.button(label="Show captions")
+    async def show_captions(self, interaction, button):
+        button.value = (button.value + 1) % 2
+        button.emoji = ON_OFF[button.value]
+        await queries.set_config_guild(
+            self.bot.db, interaction.guild_id, "show_captions", button.value
         )
         await interaction.response.edit_message(view=self)
 
@@ -239,14 +248,17 @@ class SettingsMenu(discord.ui.View):
         await UserRules(self).render(interaction)
 
     async def render(self, interaction):
-        guild_setting = await self.bot.db.execute(
-            "SELECT media_only FROM guild_settings WHERE guild_id = %s",
+        media_only_data, show_captions_data = await self.bot.db.execute(
+            "SELECT media_only, show_captions FROM guild_settings WHERE guild_id = %s",
             interaction.guild_id,
-            one_value=True,
-        )
-        value = 1 if guild_setting else 0
-        self.server_wide_toggle.value = value  # type: ignore
-        self.server_wide_toggle.emoji = ON_OFF[value]
+            one_row=True,
+        ) or [None, None]
+        self.media_only_guild.value = media_only_data or 0  # type: ignore
+        self.media_only_guild.emoji = ON_OFF[media_only_data or 0]
+
+        self.show_captions.value = show_captions_data or 1  # type: ignore
+        self.show_captions.emoji = ON_OFF[show_captions_data or 1]
+
         await interaction.response.send_message(embed=self.embed, view=self)
 
 

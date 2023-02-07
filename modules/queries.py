@@ -76,7 +76,7 @@ async def add_rule(db, guild_id, rule_type, constraint, value):
 
 async def set_config_guild(db, guild_id, setting, value):
     # just in case, dont allow anything else inside the sql string
-    if setting not in ["media_only"]:
+    if setting not in ["media_only", "show_captions"]:
         logger.error(f"Ignored configtype {setting} from executing in the database!")
     else:
         await db.execute(
@@ -128,11 +128,11 @@ async def tweet_config(db, channel, user_id):
         channel.id,
         one_value=True,
     )
-    guild_setting = await db.execute(
-        "SELECT media_only FROM guild_settings WHERE guild_id = %s",
+    guild_media_only, guild_show_captions = await db.execute(
+        "SELECT media_only, show_captions FROM guild_settings WHERE guild_id = %s",
         channel.guild.id,
-        one_value=True,
-    )
+        one_row=True,
+    ) or (None, None)
     user_setting = await db.execute(
         "SELECT media_only FROM user_rule WHERE twitter_user_id = %s AND guild_id = %s",
         user_id,
@@ -145,12 +145,13 @@ async def tweet_config(db, channel, user_id):
         value = user_setting
     elif channel_setting in (True, False):
         value = channel_setting
-    elif guild_setting in (True, False):
-        value = guild_setting
+    elif guild_media_only in (True, False):
+        value = guild_media_only
     else:
         value = False
 
     config["media_only"] = value
+    config["show_captions"] = guild_show_captions if guild_show_captions is not None else True
 
     return config
 

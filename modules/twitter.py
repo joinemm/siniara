@@ -124,15 +124,18 @@ class TwitterRenderer:
                 continue
 
             tweet_config = await queries.tweet_config(self.bot.db, channel, tweet.author_id)
+
             content = discord.Embed(color=int("1ca1f1", 16))
-            description = ""
-            if tweet.reply_to:
-                description += f"> [*replying to*]({tweet.reply_to})\n"
 
-            if tweet.text:
-                description += tweet.text
+            if tweet_config["show_captions"]:
+                description = ""
+                if tweet.reply_to:
+                    description += f"> [*replying to*]({tweet.reply_to})\n"
 
-            content.description = description
+                if tweet.text:
+                    description += tweet.text
+
+                content.description = description
 
             # discord normally has 8MB file size limit, but it can be increased in some guilds
             max_filesize = channel.guild.filesize_limit

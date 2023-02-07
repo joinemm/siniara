@@ -21,7 +21,8 @@ CREATE TABLE follow (
 
 CREATE TABLE guild_settings (
     guild_id BIGINT,
-    media_only BOOL,
+    media_only BOOL DEFAULT FALSE,
+    show_captions BOOL DEFAULT TRUE,
     PRIMARY KEY (guild_id)
 );
 
