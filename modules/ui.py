@@ -253,11 +253,17 @@ class SettingsMenu(discord.ui.View):
             interaction.guild_id,
             one_row=True,
         ) or [None, None]
-        self.media_only_guild.value = media_only_data or 0  # type: ignore
-        self.media_only_guild.emoji = ON_OFF[media_only_data or 0]
 
-        self.show_captions.value = show_captions_data or 1  # type: ignore
-        self.show_captions.emoji = ON_OFF[show_captions_data or 1]
+        if show_captions_data is None:
+            show_captions_data = 1
+        if media_only_data is None:
+            media_only_data = 0
+
+        self.media_only_guild.value = media_only_data  # type: ignore
+        self.media_only_guild.emoji = ON_OFF[media_only_data]
+
+        self.show_captions.value = show_captions_data  # type: ignore
+        self.show_captions.emoji = ON_OFF[show_captions_data]
 
         await interaction.response.send_message(embed=self.embed, view=self)
 
