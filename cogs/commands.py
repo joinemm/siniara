@@ -14,7 +14,7 @@ from modules.ui import RowPaginator
 
 class Commands(commands.Cog):
     def __init__(self, bot):
-        self.bot: Siniara = bot
+        self.bot: "Siniara" = bot
 
     @app_commands.command()
     async def info(self, interaction: discord.Interaction):

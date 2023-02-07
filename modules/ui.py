@@ -255,7 +255,7 @@ class SettingsMenu(discord.ui.View):
         ) or [None, None]
 
         if show_captions_data is None:
-            show_captions_data = 1
+            show_captions_data = 0
         if media_only_data is None:
             media_only_data = 0
 
