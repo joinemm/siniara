@@ -6,12 +6,11 @@ import discord
 from discord import Interaction
 from discord.app_commands import CommandTree
 from discord.ext import commands
+from loguru import logger
 from tweepy.asynchronous import AsyncClient
 
 from modules import maria
 from modules.config import Config
-
-from loguru import logger
 
 
 class MyTree(CommandTree):
@@ -54,6 +53,7 @@ class Siniara(commands.AutoShardedBot):
         ]
         # the user will never be none so don't ruin my type checking please
         self.user: discord.ClientUser
+        self.deletion_list = set()
 
     async def close(self):
         await self.session.close()

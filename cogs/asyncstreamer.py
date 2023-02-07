@@ -1,14 +1,15 @@
 import asyncio
 import sys
+
 import discord
 from discord.ext import commands, tasks
+from loguru import logger
 from tweepy import StreamRule, Tweet
 from tweepy.asynchronous import AsyncClient, AsyncStreamingClient
 
 from modules import queries
 from modules.siniara import Siniara
 from modules.twitter import TwitterRenderer
-from loguru import logger
 
 
 class RunForeverClient(AsyncStreamingClient):
@@ -41,7 +42,10 @@ class RunForeverClient(AsyncStreamingClient):
             if channel:
                 channels.append(channel)
             else:
-                logger.warning(f"Could not find channel with id {channel_id} for tweet {tweet}")
+                logger.warning(
+                    f"Could not find channel with id {channel_id}, adding to deletion list"
+                )
+                self.bot.deletion_list.add((channel_id, tweet.author_id))
 
         if channels:
             await self.twitter_renderer.send_tweet(tweet.id, channels)
@@ -96,10 +100,14 @@ class Streamer(commands.Cog):
 
     @tasks.loop(minutes=5)
     async def status_loop(self):
-        followed_users = await queries.get_all_users(self.bot.db)
-        await self.bot.change_presence(
-            activity=discord.Activity(name=f"{len(followed_users)} accounts", type=3)
-        )
+        try:
+            followed_users = await queries.get_all_users(self.bot.db)
+            await self.bot.change_presence(
+                activity=discord.Activity(name=f"{len(followed_users)} accounts", type=3)
+            )
+        except Exception as e:
+            logger.error("Unhandled exception in status loop")
+            logger.error(e)
 
     @tasks.loop(minutes=1)
     async def refresh_loop(self):
@@ -108,11 +116,10 @@ class Streamer(commands.Cog):
         except Exception as e:
             logger.error("Unhandled exception in refresh loop")
             logger.error(e)
-            raise e
 
     @refresh_loop.before_loop
     @status_loop.before_loop
-    async def before_refresh_loop(self):
+    async def wait_for_ready(self):
         await self.bot.wait_until_ready()
 
     async def replace_rules(self, current_rules: list[StreamRule], new_rules: list[StreamRule]):

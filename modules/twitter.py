@@ -1,18 +1,17 @@
 import asyncio
-from dataclasses import dataclass
 import io
+from dataclasses import dataclass
 from typing import Optional, Union
 
 import arrow
-import tweepy
 import discord
+import tweepy
 from discord.app_commands import AppCommandError
+from loguru import logger
 
 from modules import queries
 from modules.siniara import Siniara
 from modules.ui import LinkButton
-
-from loguru import logger
 
 SendableChannel = Union[
     discord.VoiceChannel,
@@ -119,6 +118,9 @@ class TwitterRenderer:
 
         for channel in channels:
             if not channel.guild:
+                logger.warning(
+                    f"No guild found when sending tweet id {tweet.id} destined for #{channel}"
+                )
                 continue
 
             tweet_config = await queries.tweet_config(self.bot.db, channel, tweet.author_id)
@@ -127,8 +129,8 @@ class TwitterRenderer:
             if tweet.reply_to:
                 description += f"> [*replying to*]({tweet.reply_to})\n"
 
-            if not tweet_config["media_only"] and tweet.text:
-                description += tweet.text + "\n"
+            if tweet.text:
+                description += tweet.text
 
             content.description = description
 
@@ -139,8 +141,10 @@ class TwitterRenderer:
             if not files and not too_big_files and tweet_config["media_only"]:
                 if interaction:
                     raise NoMedia
-
-                return
+                logger.warning(
+                    f"There are no files to send in tweet id {tweet.id} destined for #{channel}"
+                )
+                continue
 
             caption = "\n".join([caption] + too_big_files)
             button = LinkButton("View on Twitter", tweet.url)
@@ -169,6 +173,12 @@ class TwitterRenderer:
                     logger.warning(
                         f"No permissions to send {tweet.id} into #{channel} in {channel.guild}"
                     )
+                    if channel.guild.owner:
+                        await channel.guild.owner.send(
+                            f"I tried to send a tweet by `@{tweet.screen_name}` "
+                            f"into <#{channel.id}> in your server **{channel.guild}**, "
+                            "but I don't have the permissions to do that! Please fix."
+                        )
 
     @staticmethod
     def expand_links(tweet_text: str, urls: list[dict]):

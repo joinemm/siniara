@@ -4,7 +4,8 @@ import typing
 import arrow
 import discord
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
+from loguru import logger
 
 from modules import queries
 from modules.siniara import Siniara
@@ -41,6 +42,20 @@ class Twitter(commands.Cog):
             user_id,
             channel_id,
         )
+
+    @tasks.loop(hours=12)
+    async def purge_loop(self):
+        try:
+            for channel_id, user_id in self.bot.deletion_list:
+                await self.unfollow(channel_id, user_id)
+                self.bot.deletion_list.remove((channel_id, user_id))
+        except Exception as e:
+            logger.error("Unhandled exception in purge loop")
+            logger.error(e)
+
+    @purge_loop.before_loop
+    async def wait_for_ready(self):
+        await self.bot.wait_until_ready()
 
     @app_commands.command(name="add")
     @app_commands.default_permissions(manage_guild=True)
