@@ -171,7 +171,7 @@ class TwitterRenderer:
                     )
                 except discord.Forbidden:
                     logger.warning(
-                        f"No permissions to send {tweet.id} into #{channel} in {channel.guild}"
+                        f"No permissions to send {tweet.id} into #{channel} in {channel.guild}, notifying owner ({channel.guild.owner})"
                     )
                     if channel.guild.owner:
                         await channel.guild.owner.send(
@@ -241,7 +241,6 @@ class TwitterRenderer:
                 elif int(content_length) >= max_filesize:
                     return media_url
             else:
-                logger.warning(f"No content length header for {media_url}")
                 # there is no Content-Length header
                 # try to stream until we hit our limit
                 try:
