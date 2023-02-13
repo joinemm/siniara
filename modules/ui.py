@@ -210,7 +210,10 @@ class BooleanMenu(discord.ui.View):
         self.stop()
 
 
-ON_OFF = ["<:onbutton:998244221381263411>", "<:offbutton:998244219858731088>"]
+ON_OFF = [
+    "<:offbutton:998244219858731088>",
+    "<:onbutton:998244221381263411>",
+]
 CHECK_MARK = "\U00002705"
 NO_ENTRY = "\U0001f6ab"
 
