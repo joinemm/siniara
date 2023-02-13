@@ -76,6 +76,7 @@ class Twitter(commands.Cog):
         )
         successes = 0
         for username in usernames.split():
+            username = username.strip("@")
             status = None
             user = None
             try:
@@ -98,7 +99,7 @@ class Twitter(commands.Cog):
             rows.append(f"**@{user.username if user else username}** {status}")
 
         content = discord.Embed(
-            title=f":notepad_spiral: Added {successes}/{len(usernames)} users to {channel.name}",
+            title=f":notepad_spiral: Added {successes}/{len(usernames.split())} users to {channel.name}",
             color=self.bot.twitter_blue,
         )
         content.set_footer(text="Changes will take effect within a minute")
@@ -119,6 +120,7 @@ class Twitter(commands.Cog):
         )
         successes = 0
         for username in usernames.split():
+            username = username.strip("@")
             status = None
             try:
                 twitter_user = await self.bot.tweepy.get_user(username=username)
@@ -145,7 +147,7 @@ class Twitter(commands.Cog):
             rows.append(f"**@{username}** {status}")
 
         content = discord.Embed(
-            title=f":notepad_spiral: Removed {successes}/{len(usernames)} users from {channel.name}",
+            title=f":notepad_spiral: Removed {successes}/{len(usernames.split())} users from {channel.name}",
             color=self.bot.twitter_blue,
         )
         content.set_footer(text="Changes will take effect within a minute")

@@ -173,8 +173,9 @@ class TwitterRenderer:
                         view=button,
                     )
                 except discord.Forbidden:
+                    owner = self.bot.fetch_user(channel.guild.owner_id or 0)
                     logger.warning(
-                        f"No permissions to send {tweet.id} into #{channel} in {channel.guild}, notifying owner ({channel.guild.owner})"
+                        f"No permissions to send {tweet.id} into #{channel} in {channel.guild}, notifying owner ({owner})"
                     )
                     if channel.guild.owner:
                         await channel.guild.owner.send(
